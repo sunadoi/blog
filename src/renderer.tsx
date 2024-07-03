@@ -1,8 +1,8 @@
-import { jsxRenderer } from 'hono/jsx-renderer'
+import { jsxRenderer } from "hono/jsx-renderer"
 
 export const renderer = jsxRenderer(({ children, title }) => {
   return (
-    <html>
+    <html lang="ja">
       <head>
         <link href="/static/style.css" rel="stylesheet" />
         <title>{title}</title>
