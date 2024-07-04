@@ -6,8 +6,8 @@
     "build": "vite build --mode client && vite build",
     "check": "biome check src",
     "check:fix": "biome check --write --unsafe src",
-    "preview": "wrangler pages dev",
-    "deploy": "wrangler pages deploy"
+    "preview": "vite build --mode client && vite build && wrangler pages dev",
+    "deploy": "vite build --mode client && vite build && wrangler pages deploy"
   },
   "dependencies": {
     "hono": "^4.4.11",
@@ -18,6 +18,10 @@
     "@hono/vite-cloudflare-pages": "^0.4.1",
     "@hono/vite-dev-server": "^0.12.1",
     "@hono/vite-ssg": "^0.1.0",
+    "@mdx-js/rollup": "^3.0.1",
+    "remark-breaks": "^4.0.0",
+    "remark-frontmatter": "^5.0.0",
+    "remark-mdx-frontmatter": "^5.0.0",
     "vite": "^5.2.12",
     "wrangler": "^3.57.2"
   }
