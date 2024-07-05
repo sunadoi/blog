@@ -10,8 +10,13 @@
     "deploy": "vite build --mode client && vite build && wrangler pages deploy"
   },
   "dependencies": {
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
     "hono": "^4.4.11",
-    "honox": "^0.1.23"
+    "honox": "^0.1.23",
+    "lucide-react": "^0.400.0",
+    "tailwind-merge": "^2.3.0",
+    "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240529.0",
@@ -20,6 +25,7 @@
     "@hono/vite-ssg": "^0.1.0",
     "@mdx-js/rollup": "^3.0.1",
     "@rehype-pretty/transformers": "^0.13.2",
+    "@types/node": "^20.14.9",
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.39",
     "rehype-pretty-code": "^0.13.2",

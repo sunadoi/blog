@@ -1,3 +1,4 @@
+import path from "node:path"
 import ssg from "@hono/vite-ssg"
 import honox from "honox/vite"
 import client from "honox/vite/client"
@@ -39,5 +40,8 @@ export default defineConfig(({ mode }) => {
             ],
           }),
         ],
+        resolve: {
+          alias: { "@": path.resolve(__dirname, "./app") },
+        },
       }
 })

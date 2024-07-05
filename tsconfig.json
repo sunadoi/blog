@@ -7,6 +7,8 @@
     "skipLibCheck": true,
     "lib": ["ESNext"],
     "types": ["@cloudflare/workers-types", "vite/client"],
+    "baseUrl": ".",
+    "paths": { "@/*": ["./app/*"] },
     "jsx": "react-jsx",
     "jsxImportSource": "hono/jsx"
   },
