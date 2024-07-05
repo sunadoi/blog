@@ -12,9 +12,9 @@ export default createRoute(
 
     return c.render(
       <div>
-        <p>{article?.slug}</p>
-        <p>{article?.frontmatter.title}</p>
-        <p>{article?.Component()}</p>
+        <p>{article.slug}</p>
+        <p>{article.frontmatter.title}</p>
+        <p>{article.Component()}</p>
       </div>,
       {
         title: article?.frontmatter.title,

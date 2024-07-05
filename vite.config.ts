@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
           honox({ client: { input: ["/app/style.css"] } }),
           ssg({ entry: "./app/server.ts" }),
           mdx({
-            jsxImportSource: "hono/jsx",
+            jsxImportSource: "react",
             remarkPlugins: [
               remarkFrontmatter,
               remarkMdxFrontmatter,
@@ -40,6 +40,7 @@ export default defineConfig(({ mode }) => {
             ],
           }),
         ],
+        ssr: { external: ["react", "react-dom"] },
         resolve: {
           alias: { "@": path.resolve(__dirname, "./app") },
         },

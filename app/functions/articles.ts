@@ -3,7 +3,7 @@ import type { JSX } from "hono/jsx/jsx-runtime"
 type Article = {
   slug: string
   frontmatter: Frontmatter
-  Component: () => JSX.Element
+  Component: () => React.ReactNode
 }
 
 type Frontmatter = {
@@ -12,7 +12,7 @@ type Frontmatter = {
 
 type MDX = {
   frontmatter: Frontmatter
-  default: () => JSX.Element
+  default: () => React.ReactNode
 }
 
 const articles = import.meta.glob<MDX>("../articles/**/*.mdx", {
