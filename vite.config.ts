@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
     : {
         build: { emptyOutDir: false },
         plugins: [
-          honox(),
+          honox({ client: { input: ["/app/style.css"] } }),
           ssg({ entry: "./app/server.ts" }),
           mdx({
             jsxImportSource: "hono/jsx",
