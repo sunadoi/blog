@@ -6,6 +6,8 @@ import mdx from "@mdx-js/rollup"
 import remarkFrontmatter from "remark-frontmatter"
 import remarkMdxFrontmatter from "remark-mdx-frontmatter"
 import remarkBreaks from "remark-breaks"
+import rehypePrettyCode from "rehype-pretty-code"
+import { transformerCopyButton } from "@rehype-pretty/transformers"
 
 export default defineConfig(({ mode }) => {
   return mode === "client"
@@ -23,6 +25,17 @@ export default defineConfig(({ mode }) => {
               remarkFrontmatter,
               remarkMdxFrontmatter,
               remarkBreaks,
+            ],
+            rehypePlugins: [
+              [
+                rehypePrettyCode,
+                {
+                  theme: "monokai",
+                  transformers: [
+                    transformerCopyButton({ visibility: "always" }),
+                  ],
+                },
+              ],
             ],
           }),
         ],
