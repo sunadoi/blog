@@ -14,11 +14,29 @@ export default defineConfig(({ mode }) => {
   return mode === "client"
     ? {
         plugins: [client()],
+        resolve: {
+          alias: { "@": path.resolve(__dirname, "./app") },
+        },
+        build: {
+          rollupOptions: {
+            // input: ["./app/client.ts", "./app/styles/index.css"],
+            // output: {
+            //   entryFileNames: "static/client.js",
+            //   chunkFileNames: "static/assets/[name]-[hash].js",
+            //   assetFileNames: "static/assets/[name].[ext]",
+            // },
+            onwarn(warning, warn) {
+              // ライブラリのuse clientディレクティブを読み込んでエラーになるのでignore
+              if (warning.code === "MODULE_LEVEL_DIRECTIVE") return
+              warn(warning)
+            },
+          },
+        },
       }
     : {
         build: { emptyOutDir: false },
         plugins: [
-          honox({ client: { input: ["/app/style.css"] } }),
+          honox({ client: { input: ["./app/styles/index.css"] } }),
           ssg({ entry: "./app/server.ts" }),
           mdx({
             jsxImportSource: "react",
