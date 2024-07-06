@@ -41,6 +41,7 @@ export default defineConfig(({ mode }) => {
           mdx({
             jsxImportSource: "react",
             jsxRuntime: "classic",
+            providerImportSource: "./app/lib/useMDXComponents.tsx",
             remarkPlugins: [
               remarkFrontmatter,
               remarkMdxFrontmatter,
