@@ -1,5 +1,3 @@
-import type { JSX } from "hono/jsx/jsx-runtime"
-
 type Article = {
   slug: string
   frontmatter: Frontmatter

@@ -13,18 +13,18 @@ import { transformerCopyButton } from "@rehype-pretty/transformers"
 export default defineConfig(({ mode }) => {
   return mode === "client"
     ? {
-        plugins: [client()],
+        plugins: [client({ jsxImportSource: "react" })],
         resolve: {
           alias: { "@": path.resolve(__dirname, "./app") },
         },
         build: {
           rollupOptions: {
-            // input: ["./app/client.ts", "./app/styles/index.css"],
-            // output: {
-            //   entryFileNames: "static/client.js",
-            //   chunkFileNames: "static/assets/[name]-[hash].js",
-            //   assetFileNames: "static/assets/[name].[ext]",
-            // },
+            input: ["./app/client.ts", "./app/styles/index.css"],
+            output: {
+              entryFileNames: "static/client.js",
+              chunkFileNames: "static/chunks/[name]-[hash].js",
+              assetFileNames: "static/assets/[name].[ext]",
+            },
             onwarn(warning, warn) {
               // ライブラリのuse clientディレクティブを読み込んでエラーになるのでignore
               if (warning.code === "MODULE_LEVEL_DIRECTIVE") return
