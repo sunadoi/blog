@@ -40,6 +40,7 @@ export default defineConfig(({ mode }) => {
           ssg({ entry: "./app/server.ts" }),
           mdx({
             jsxImportSource: "react",
+            jsxRuntime: "classic",
             remarkPlugins: [
               remarkFrontmatter,
               remarkMdxFrontmatter,
