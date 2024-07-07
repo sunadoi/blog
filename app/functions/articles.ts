@@ -1,7 +1,7 @@
 type Article = {
   slug: string
   frontmatter: Frontmatter
-  Component: () => React.ReactNode
+  Component: () => JSX.Element
 }
 
 type Frontmatter = {
@@ -10,7 +10,7 @@ type Frontmatter = {
 
 type MDX = {
   frontmatter: Frontmatter
-  default: () => React.ReactNode
+  default: () => JSX.Element
 }
 
 const articles = import.meta.glob<MDX>("../articles/**/*.mdx", {

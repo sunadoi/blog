@@ -10,7 +10,7 @@
     "baseUrl": ".",
     "paths": { "@/*": ["./app/*"] },
     "jsx": "react-jsx",
-    "jsxImportSource": "react"
+    "jsxImportSource": "hono/jsx"
   },
   "include": ["app/**/*.ts", "app/**/*.tsx"],
   "exclude": ["node_modules", "dist"]

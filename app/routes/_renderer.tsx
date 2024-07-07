@@ -1,11 +1,11 @@
-import { reactRenderer } from "@hono/react-renderer"
+import { jsxRenderer } from "hono/jsx-renderer"
 import { Script } from "honox/server"
 
-export default reactRenderer(({ children, title }) => {
+export default jsxRenderer(({ children, title }) => {
   return (
     <html lang="ja">
       <head>
-        <meta charSet="UTF-8" />
+        <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <Script src="/app/client.ts" async />
         {import.meta.env.PROD ? (
@@ -15,7 +15,7 @@ export default reactRenderer(({ children, title }) => {
         )}
         {title && <title>{title}</title>}
       </head>
-      <body>{children}</body>
+      <body className="dark">{children}</body>
     </html>
   )
 })

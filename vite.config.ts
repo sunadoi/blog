@@ -13,7 +13,7 @@ import { transformerCopyButton } from "@rehype-pretty/transformers"
 export default defineConfig(({ mode }) => {
   return mode === "client"
     ? {
-        plugins: [client({ jsxImportSource: "react" })],
+        plugins: [client()],
         resolve: {
           alias: { "@": path.resolve(__dirname, "./app") },
         },
@@ -39,8 +39,7 @@ export default defineConfig(({ mode }) => {
           honox({ client: { input: ["./app/styles/index.css"] } }),
           ssg({ entry: "./app/server.ts" }),
           mdx({
-            jsxImportSource: "react",
-            jsxRuntime: "classic",
+            jsxImportSource: "hono/jsx",
             providerImportSource: "./app/lib/useMDXComponents.tsx",
             remarkPlugins: [
               remarkFrontmatter,
@@ -60,7 +59,6 @@ export default defineConfig(({ mode }) => {
             ],
           }),
         ],
-        ssr: { external: ["react", "react-dom"] },
         resolve: {
           alias: { "@": path.resolve(__dirname, "./app") },
         },
