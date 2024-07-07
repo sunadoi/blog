@@ -21,6 +21,7 @@ const articles = import.meta.glob<MDX>("../articles/**/*.mdx", {
 
 export const getArticles = (): Article[] => {
   return Object.entries(articles).map(([path, article]) => {
+    console.log({ article })
     const match = path.match(/([^/]+)\.mdx$/)
     if (!match) throw new Error(`Invalid path, ${path}`)
 

@@ -14,7 +14,7 @@ export default createRoute(
       <div>
         <p>{article.slug}</p>
         <p>{article.frontmatter.title}</p>
-        <article className="text-tomato-8">{article.Component()}</article>
+        <article>{article.Component()}</article>
       </div>,
       {
         title: article?.frontmatter.title,
