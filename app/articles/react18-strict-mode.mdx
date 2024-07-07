@@ -1,0 +1,161 @@
+---
+title: React18でのStrictモードとuseEffectの挙動
+---
+
+
+ReactのStrictモードがv18になって挙動が追加された。
+追加された挙動となぜそれが追加されたのかということについて調べた。
+せっかくなのでここでまとめておく。
+
+わりと調べて書いたつもりですが、もし内容が間違ってたら教えてください。
+
+## Strictモードとは
+
+ここでは簡単にStrictモードについておさらいしておく。
+以下がドキュメント。
+(基本的にここで書いてある内容はドキュメントとReact18のDiscussionsに記載してある。どちらも最後に参照先のURLを記載しておく。)
+https://reactjs.org/docs/strict-mode.html
+Strictモードとは、アプリケーションに存在している様々な潜在的な問題点をwarningとして出してくれるもの。
+
+重要なことはStrictモードによって影響があるのは開発モードのみであって、本番環境ビルドでは何も影響がないということ。
+したがって、Strictモードによるwarningがあったとしても本番環境の成果物には影響がない。
+ただ、将来的にサポートしなくなる機能だったり、新しい機能によって壊れる可能性のあるものに関してwarningを出してくれてるので、ちゃんと対応しておいた方がよい
+
+Strictモードで検出できる問題はいくつかあるが、現時点で一般的な使い方をしていれば問題になりそうなのは「予期せぬ副作用の検出」くらいだと勝手に思っている。
+なのでここではこの点に絞って記載する。
+
+## 予期せぬ副作用の検出
+
+ここではまず、そもそもなぜ予期せぬ副作用が生じうるのかということを抑えておく。
+
+ReactがUIを表示するまでの過程は大きく2つのフェーズに分かれる。
+それが、**レンダリングフェーズ**と**コミットフェーズ**。
+
+ざっくり言うと、レンダリングフェーズはDOMにどのような変更を加えるかを決めるステップで差分比較とかがここに含まれる。renderの処理やsetState による更新処理はここで行われる。
+一方コミットフェーズは変更を実際に加えるステップで、useEffectの処理などはこのステップで行われる。
+
+React17までの世界ではレンダリングフェーズとコミットフェーズがそれぞれ1回ずつ行われる前提だった。
+React18以降の世界ではconcurrent renderingによってレンダリングフェーズが複数回行われうる世界になった。
+
+つまり、レンダリングフェーズで冪等じゃない副作用の処理を行なっていた場合、意図せぬ挙動を行うことになる。
+これが予期せぬ副作用が起こるケースであり、こういった挙動によるバグはそもそも表面化しなくて見つけにくかったり再現するのが難しかったりと頭を悩ます種になりやすい。
+
+そういった挙動を検出しやすくするための機能がStrictモードである。
+ただしStrictモードを使ってもこういった副作用を自動的に検出することはできない。
+その代わり開発モードにおいて、以下の関数を意図的に2回呼び出すようにしている。
+
+> ・Class component constructor, render, and shouldComponentUpdate methods
+・Class component static getDerivedStateFromProps method
+・Function component bodies
+・State updater functions (the first argument to setState)
+・Functions passed to useState, useMemo, or useReducer
+
+仮に上記の関数内で冪等じゃない処理を行なっていた場合は、2回呼び出されることによって問題が表面化しやすくなる。
+こうして問題のある処理を発見しやすくするための仕組みがStrictモード。
+繰り返しになるが、2回呼び出されるのはあくまで開発モードなので本番環境ビルドしたものには影響がない。
+
+Strictモードは16.3から導入されたものだが、この頃からきたるべきconcurrent renderingに向けて導入していたと考えると計画性と設計がすごいなと思う
+
+## React18で追加された挙動
+
+さて、React18のStrictモードでは上記の挙動に併せて、初回レンダリング時にmount→unmount→mount という挙動を行うようになった。
+
+これによってuseEffectの挙動が以下のように変わる。
+
+```tsx title="sample.tsx" {6,9}
+useEffect(() => {
+  console.log('mount')
+  return () => console.log('unmount')
+}, [])
+
+// React17までの初回レンダリング時
+// mount
+
+// React18での初回レンダリング時
+// mount
+// unmount
+// mount
+```
+
+初回レンダリングでmountとunmountを繰り返すので、useEffectの第二引数を[]にしていても処理が2回走るようになる(これもあくまで開発モードのみ)。
+
+つまりuseEffectの中でクリーンアップ関数込みで冪等じゃない副作用の処理をしていた場合はバグる可能性がある。
+
+### なぜこのような挙動が追加されたのか
+
+ここで少し立ち止まって考えてみる。
+これまでに見てきた通り、Reactにはレンダリングフェーズとコミットフェーズがあり、concurrent renderingによってレンダリングフェーズは複数回行われうる。
+一方でconcurrent renderingでもコミットフェーズは依然としてレンダリングの過程で1回しか呼ばれない。
+であるならば、React18でconcurrent renderingが導入されたとしてもuseEffectの第二引数が[]の場合は、1度しか呼ばれないことが保証されているのではないだろうか？
+
+これは現時点ではそうであるが、今後新機能が追加された際にはそうではなくなるという認識でいる。
+具体例の一つとして以下のDiscussionsで言及されているOffscreen APIが該当する。
+https://github.com/reactwg/react-18/discussions/19
+これがどういうものか詳細な説明は省くが、簡単に言うとタブのようなUIでstateを管理するためのもの。
+それぞれのタブの中でstate管理していた場合に、通常は別タブをクリックした時点で元のタブはunmountされるので保持していたstateはリセットされる。その後元のタブに戻った際にはstateは初期化された状態になってしまう。
+このようなケースで元のタブに戻った時に、以前までのstateを保持していたいよねってのを実現するためのものがOffscreen API。
+
+どう実現するかと言うと、unmountはせずあくまでUI上隠しておくに留める。そしてstate自体は保持しておいて、再度表示される際には元のstateを使用するというイメージ。
+Reactはunmountのクリーンアップ関数処理を行うことを通じて、この隠すという動作をコンポーネントに伝えるらしい。
+また、再表示の際にはmount時に発火する処理と同じ処理を行っている。
+
+すなわち、useEffectはこれまでmountで発火してunmountでクリーンアップという挙動だったが、Offscreen API下では表示で発火して非表示でクリーンアップという挙動になる。
+
+このような場合にuseEffectの処理がクリーンアップ込みで冪等ではない場合意図せぬ副作用が発生することになる。
+そのような実装を検知しやすくするために今回Strictモードではmount →unmount→mountという挙動を追加したという理解でいる。
+
+### Offscrreen APIを使わない場合は関係ないのか
+
+実は現時点で既にmountとunmountが繰り返される挙動が存在していて、それがFast Refresh。
+webpackとかを使っているとプラグインでよく使われるコードの変更を素早く反映させるための機能。
+
+ただし、これは本当に開発時にコード変えた時限定の挙動なので、さほど気にしなくてもいいのではないかとも思う。
+
+一方で先のDiscussionsでは下記のような記載があり、multiple featuresと書かれてるのでOffscreen API以外にも今後mountとunmountが複数回行われても大丈夫なことを前提とした機能は出てくるのではと思っている。
+(実際Discussions内ではvirtualized listsにも言及されている)
+そのような世界が訪れた時のために早めに対応しておいて損はないのではないだろうか。
+
+> There are multiple features we’d like to add to React that have the same constraint: a component needs to be resilient to being “mounted” and “unmounted” more than once.
+*https://github.com/reactwg/react-18/discussions/19*
+
+いずれにせよuseEffectでの処理はクリーンアップ込みで冪等であるべきな気がしているので、個人的にはこの際に検出しておいた方がいいのではないかと思っている。
+
+
+### とはいえ、実際に1回しか発火させたくない場合はどうするのか
+
+そうは言っても2回発火されると困る処理とかもあるのではと思う。
+パッと思いつくのだと、mountしたことをトリガーとして何かしらのイベントを送信するときとか。
+
+その場合どうするのかというと、refを使って管理するのが今の所良さそう。
+全てではないがこれで大抵の場合はカバーできるだろうとのこと。
+https://github.com/reactwg/react-18/discussions/18#discussion-3385714
+
+```tsx
+const didLogRef = useRef(false);
+
+useEffect(() => {
+  // In this case, whether we are mounting or remounting,
+  // we use a ref so that we only log an impression once.
+  if (didLogRef.current === false) {
+    didLogRef.current = true;
+
+    SomeTrackingAPI.logImpression();
+  }
+}, []);
+```
+
+### この挙動だけopt outできるのか
+
+できない。React18でStrictモードを有効にした場合は、この挙動は必然的に追加される。
+
+## まとめ
+
+16.3という遥か昔からconcurrent renderingの世界を見据えてStrictモードを用意していた設計はすごいの一言に尽きる。
+
+深堀してみたけどなかなかいい勉強になった。
+今後も新しい機能がどんどん追加されそうで非常に楽しみである。
+
+## 参考
+
+https://reactjs.org/docs/strict-mode.html
+https://github.com/reactwg/react-18/discussions/19

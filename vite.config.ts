@@ -6,6 +6,7 @@ import { defineConfig } from "vite"
 import mdx from "@mdx-js/rollup"
 import remarkFrontmatter from "remark-frontmatter"
 import remarkMdxFrontmatter from "remark-mdx-frontmatter"
+import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
 import rehypePrettyCode from "rehype-pretty-code"
 import { transformerCopyButton } from "@rehype-pretty/transformers"
@@ -52,6 +53,7 @@ export default defineConfig(({ mode }) => {
               remarkFrontmatter,
               remarkMdxFrontmatter,
               remarkBreaks,
+              remarkGfm,
             ],
             rehypePlugins: [
               [

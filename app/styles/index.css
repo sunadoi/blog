@@ -1,3 +1,4 @@
+@import './syntax-hilight.css';
 @import './radix-colors.css';
 
 @tailwind base;
@@ -14,21 +15,17 @@
 }
 
 h1 {
-  @apply text-4xl;
-}
-
-h2 {
   @apply text-3xl;
 }
 
-h3 {
+h2 {
   @apply text-2xl;
 }
 
-h4 {
+h3 {
   @apply text-xl;
 }
 
-h5 {
+h4 {
   @apply text-lg;
 }

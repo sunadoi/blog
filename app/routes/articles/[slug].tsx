@@ -12,9 +12,12 @@ export default createRoute(
 
     return c.render(
       <div>
-        <p>{article.slug}</p>
-        <p>{article.frontmatter.title}</p>
-        <article>{article.Component()}</article>
+        <article className="flex flex-col gap-8 leading-8">
+          <h1 className="font-bold text-primary">
+            {article.frontmatter.title}
+          </h1>
+          {article.Component()}
+        </article>
       </div>,
       {
         title: article?.frontmatter.title,
