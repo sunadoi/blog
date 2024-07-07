@@ -61,7 +61,10 @@ export default defineConfig(({ mode }) => {
                 {
                   theme: "monokai",
                   transformers: [
-                    transformerCopyButton({ visibility: "always" }),
+                    transformerCopyButton({
+                      visibility: "always",
+                      feedbackDuration: 1000,
+                    }),
                   ],
                 },
               ],

@@ -1,9 +1,9 @@
 /* https://rehype-pretty.pages.dev/#line-numbers */
-code {
+pre > code {
   counter-reset: line;
 }
 
-code > [data-line]::before {
+pre > code > [data-line]::before {
   counter-increment: line;
   content: counter(line);
 
@@ -15,11 +15,11 @@ code > [data-line]::before {
   color: gray;
 }
 
-code[data-line-numbers-max-digits="2"] > [data-line]::before {
+pre > code[data-line-numbers-max-digits="2"] > [data-line]::before {
   width: 2rem;
 }
 
-code[data-line-numbers-max-digits="3"] > [data-line]::before {
+pre > code[data-line-numbers-max-digits="3"] > [data-line]::before {
   width: 3rem;
 }
 
@@ -27,6 +27,13 @@ pre {
   @apply rounded-md;
   @apply py-4;
   @apply px-2;
+}
+
+p > code {
+  @apply rounded-md;
+  @apply bg-muted;
+  @apply px-2;
+  @apply py-1;
 }
 
 [data-highlighted-line] {
@@ -40,4 +47,9 @@ pre {
 
 [data-highlighted-line-id="remove"] {
   background: #3F2D32;
+}
+
+figure[data-rehype-pretty-code-figure]:has(> [data-rehype-pretty-code-title])
+  pre {
+  @apply !rounded-tl-none;
 }

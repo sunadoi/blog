@@ -1,4 +1,5 @@
 import type { MDXComponents } from "mdx/types"
+import { FileIconMap } from "@/constants/fileIconMap"
 
 export function useMDXComponents(): MDXComponents {
   return {
@@ -37,6 +38,19 @@ export function useMDXComponents(): MDXComponents {
         {props.children}
       </blockquote>
     ),
+    figcaption: (props) => {
+      const icon = FileIconMap.get(props["data-language"])
+
+      return (
+        <figcaption
+          className="flex gap-2 text-slate-100 bg-slate-600 rounded-md rounded-b-none px-4 w-fit"
+          {...props}
+        >
+          {icon && <img src={icon} alt="" width={16} height={16} />}
+          {props.children}
+        </figcaption>
+      )
+    },
     // codeのスタイルはstyles/syntax-hilight.cssで定義
   }
 }
