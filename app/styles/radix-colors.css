@@ -1,7 +1,7 @@
 @layer base {
   :root {
     --background: var(--indigo1);
-    --foreground: var(--indigo12);
+    --foreground: var(--slate12);
 
     --primary: var(--indigo11);
     --primary-foreground: var(--indigo3);

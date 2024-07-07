@@ -24,7 +24,7 @@ export default jsxRenderer(({ children, title }) => {
       </head>
       <body>
         <Header />
-        {children}
+        <main className="px-20 py-10">{children}</main>
       </body>
     </html>
   )

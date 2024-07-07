@@ -6,7 +6,9 @@ export const Header = () => {
 
   return (
     <header className={base()}>
-      <h1 className={title()}>Suna's Box</h1>
+      <a href="/">
+        <h1 className={title()}>Suna's Box</h1>
+      </a>
       <ul className={links()}>
         <li>About</li>
         <li>Category</li>
@@ -19,8 +21,8 @@ export const Header = () => {
 const header = tv(
   {
     slots: {
-      base: "flex h-16 items-center justify-between w-full bg-background px-3 py-2",
-      title: "text-2xl font-bold",
+      base: "flex h-20 items-center justify-between w-full bg-background px-20 py-4",
+      title: "text-primary font-bold",
       links: "flex gap-4 items-center",
     },
   },
