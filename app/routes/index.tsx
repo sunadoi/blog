@@ -1,3 +1,4 @@
+import Counter from "@/islands/counter"
 import { getArticles } from "../functions/articles"
 import { createRoute } from "honox/factory"
 
@@ -8,6 +9,7 @@ export default createRoute((c) => {
     <div>
       <h1>Hello</h1>
       <h2>hello</h2>
+      <Counter />
       {articles.map((article) => (
         <li key={article.slug}>
           <p>{article.slug}</p>
