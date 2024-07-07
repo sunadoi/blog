@@ -1,6 +1,6 @@
 import Counter from "@/islands/counter"
-import { getArticles } from "../functions/articles"
 import { createRoute } from "honox/factory"
+import { getArticles } from "../functions/articles"
 
 export default createRoute((c) => {
   const articles = getArticles()
