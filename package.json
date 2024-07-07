@@ -31,6 +31,7 @@
     "remark-frontmatter": "^5.0.0",
     "remark-mdx-frontmatter": "^5.0.0",
     "shiki": "^1.10.1",
+    "tailwind-variants": "^0.2.1",
     "tailwindcss": "^3.4.4",
     "vite": "^5.2.12",
     "windy-radix-palette": "^2.0.0-beta.7",

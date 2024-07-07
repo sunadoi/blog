@@ -1,4 +1,5 @@
-import { ThemeButton } from "@/islands/Theme"
+import { Header } from "@/components/projects/Header"
+import { ThemeButton } from "@/components/parts/_Theme.island"
 import { jsxRenderer } from "hono/jsx-renderer"
 import { Script } from "honox/server"
 
@@ -22,7 +23,7 @@ export default jsxRenderer(({ children, title }) => {
         {title && <title>{title}</title>}
       </head>
       <body>
-        <ThemeButton />
+        <Header />
         {children}
       </body>
     </html>
