@@ -1,0 +1,17 @@
+.toc {
+  @apply border-y-2;
+  @apply border-y-primary;
+  @apply border-dotted;
+  @apply py-2;
+  @apply px-6;
+}
+
+.toc a {
+  @apply hover:opacity-80;
+}
+
+.toc .toc-item-h3::before {
+  content: " ";
+  display: inline-block;
+  width: 2rem;
+}

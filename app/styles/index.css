@@ -1,5 +1,6 @@
 @import './syntax-hilight.css';
 @import './radix-colors.css';
+@import './toc.css';
 
 @tailwind base;
 @tailwind components;

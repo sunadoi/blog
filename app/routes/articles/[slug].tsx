@@ -12,7 +12,7 @@ export default createRoute(
 
     return c.render(
       <div>
-        <article className="flex flex-col gap-8 leading-8">
+        <article className="flex flex-col mx-24 gap-8 leading-8">
           <h1 className="font-bold text-primary">
             {article.frontmatter.title}
           </h1>

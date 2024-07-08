@@ -32,7 +32,7 @@ export function useMDXComponents(): MDXComponents {
     },
     blockquote: (props) => (
       <blockquote
-        className="bg-slate-2 border-l-4 border-slate-4 pl-2 py-4 rounded-md"
+        className="text-slate-11 border-l-4 border-slate-4 pl-2 py-2"
         {...props}
       >
         {props.children}
