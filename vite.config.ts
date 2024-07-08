@@ -43,6 +43,7 @@ export default defineConfig(({ mode }) => {
       }
     : {
         build: { emptyOutDir: false },
+        publicDir: "./app/public",
         plugins: [
           honox({ client: { input: ["./app/styles/index.css"] } }),
           ssg({ entry: "./app/server.ts" }),

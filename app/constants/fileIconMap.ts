@@ -1,7 +1,6 @@
-import ReactFileIcon from "@/assets/code/react.svg"
-import GoFileIcon from "@/assets/code/go.svg"
+import { getAssetPath } from "@/functions/assetPath"
 
 export const FileIconMap = new Map<string, string>([
-  ["tsx", ReactFileIcon],
-  ["go", GoFileIcon],
+  ["tsx", getAssetPath("/assets/react.svg")],
+  ["go", getAssetPath("/assets/code/go.svg")],
 ])
