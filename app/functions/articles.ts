@@ -7,6 +7,10 @@ type Article = {
   Component: () => JSX.Element
 }
 
+type Tag = {
+  [key: string]: number
+}
+
 type Frontmatter = {
   title: string
   icon: ArticleIconKey
@@ -15,24 +19,31 @@ type Frontmatter = {
 }
 
 type MDX = {
-  frontmatter: Frontmatter
+  frontmatter: Omit<Frontmatter, "tags"> & { tags: string }
   default: () => JSX.Element
 }
 
-const articles = import.meta.glob<MDX>("../articles/**/*.mdx", {
+const files = import.meta.glob<MDX>("../articles/**/*.mdx", {
   eager: true,
 })
 
-export const getArticles = (): Article[] => {
-  return Object.entries(articles)
-    .map(([path, article]) => {
+export const getArticles = (): { articles: Article[]; tagCount: Tag } => {
+  const tagCount: Tag = {}
+  const articles = Object.entries(files)
+    .map(([path, file]) => {
       const match = path.match(/([^/]+)\.mdx$/)
       if (!match) throw new Error(`Invalid path, ${path}`)
 
+      const tags = file.frontmatter.tags.split(",")
+
+      for (const tag of tags) {
+        tagCount[tag] = (tagCount[tag] || 0) + 1
+      }
+
       return {
         slug: match[1],
-        frontmatter: article.frontmatter,
-        Component: article.default,
+        frontmatter: { ...file.frontmatter, tags },
+        Component: file.default,
       }
     })
     .sort((a, b) => {
@@ -41,8 +52,10 @@ export const getArticles = (): Article[] => {
         new Date(a.frontmatter.publishedAt).getTime()
       )
     })
+
+  return { articles, tagCount }
 }
 
 export const getArticle = (slug: string): Article | undefined => {
-  return getArticles().find((article) => article.slug === slug)
+  return getArticles().articles.find((article) => article.slug === slug)
 }

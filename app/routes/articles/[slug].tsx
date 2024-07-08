@@ -3,7 +3,9 @@ import { createRoute } from "honox/factory"
 import { getArticle, getArticles } from "../../functions/articles"
 
 export default createRoute(
-  ssgParams(() => getArticles().map((article) => ({ slug: article.slug }))),
+  ssgParams(() =>
+    getArticles().articles.map((article) => ({ slug: article.slug })),
+  ),
   async (c) => {
     const slug = c.req.param("slug")
     const article = getArticle(slug)
