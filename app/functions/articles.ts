@@ -1,4 +1,5 @@
 import type { JSX } from "hono/jsx/jsx-runtime"
+import type { ArticleIconKey } from "@/constants/articleIconMap"
 
 type Article = {
   slug: string
@@ -8,6 +9,9 @@ type Article = {
 
 type Frontmatter = {
   title: string
+  icon: ArticleIconKey
+  tags: string[]
+  publishedAt: string
 }
 
 type MDX = {
