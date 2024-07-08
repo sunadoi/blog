@@ -1,5 +1,7 @@
 import type { MDXComponents } from "mdx/types"
 import { FileIconMap } from "@/constants/fileIconMap"
+import { Anchor } from "./Anchor"
+import { EmbedLink } from "./EmbedLink"
 
 export function useMDXComponents(): MDXComponents {
   return {
@@ -20,24 +22,18 @@ export function useMDXComponents(): MDXComponents {
       return props.href.startsWith("#") ? (
         <a href={props.href}>{props.children}</a>
       ) : (
-        <a
-          className="text-accent-foreground underline hover:opacity-70"
-          target="_blank"
-          rel="noreferrer"
-          {...props}
-        >
-          {props.children}
-        </a>
+        <Anchor {...props} />
       )
     },
     blockquote: (props) => (
       <blockquote
-        className="text-slate-11 border-l-4 border-slate-4 pl-2 py-2"
+        className="text-slate-11 border-l-4 border-slate-4 pl-4 py-2"
         {...props}
       >
         {props.children}
       </blockquote>
     ),
+    EmbedLink: EmbedLink,
     figcaption: (props) => {
       const icon = FileIconMap.get(props["data-language"])
 

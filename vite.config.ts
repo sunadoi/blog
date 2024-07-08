@@ -48,7 +48,7 @@ export default defineConfig(({ mode }) => {
           ssg({ entry: "./app/server.ts" }),
           mdx({
             jsxImportSource: "hono/jsx",
-            providerImportSource: "./app/lib/useMDXComponents.tsx",
+            providerImportSource: "./app/lib/useMDXComponents/index.tsx",
             remarkPlugins: [
               remarkFrontmatter,
               remarkMdxFrontmatter,
@@ -74,6 +74,7 @@ export default defineConfig(({ mode }) => {
             ],
           }),
         ],
+        ssr: { external: ["jsdom"] },
         resolve: {
           alias: { "@": path.resolve(__dirname, "./app") },
         },

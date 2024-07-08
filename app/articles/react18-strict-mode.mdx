@@ -14,7 +14,7 @@ ReactのStrictモードがv18になって挙動が追加された。
 ここでは簡単にStrictモードについておさらいしておく。
 以下がドキュメント。
 (基本的にここで書いてある内容はドキュメントとReact18のDiscussionsに記載してある。どちらも最後に参照先のURLを記載しておく。)
-https://reactjs.org/docs/strict-mode.html
+<EmbedLink url="https://reactjs.org/docs/strict-mode.html" />
 Strictモードとは、アプリケーションに存在している様々な潜在的な問題点をwarningとして出してくれるもの。
 
 重要なことはStrictモードによって影響があるのは開発モードのみであって、本番環境ビルドでは何も影響がないということ。
@@ -90,7 +90,7 @@ useEffect(() => {
 
 これは現時点ではそうであるが、今後新機能が追加された際にはそうではなくなるという認識でいる。
 具体例の一つとして以下のDiscussionsで言及されているOffscreen APIが該当する。
-https://github.com/reactwg/react-18/discussions/19
+<EmbedLink url="https://github.com/reactwg/react-18/discussions/19" />
 これがどういうものか詳細な説明は省くが、簡単に言うとタブのようなUIでstateを管理するためのもの。
 それぞれのタブの中でstate管理していた場合に、通常は別タブをクリックした時点で元のタブはunmountされるので保持していたstateはリセットされる。その後元のタブに戻った際にはstateは初期化された状態になってしまう。
 このようなケースで元のタブに戻った時に、以前までのstateを保持していたいよねってのを実現するためのものがOffscreen API。
@@ -128,7 +128,7 @@ webpackとかを使っているとプラグインでよく使われるコード�
 
 その場合どうするのかというと、refを使って管理するのが今の所良さそう。
 全てではないがこれで大抵の場合はカバーできるだろうとのこと。
-https://github.com/reactwg/react-18/discussions/18#discussion-3385714
+<EmbedLink url="https://github.com/reactwg/react-18/discussions/18#discussion-3385714" />
 
 ```tsx
 const didLogRef = useRef(false);
