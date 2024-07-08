@@ -1,6 +1,7 @@
 /* https://rehype-pretty.pages.dev/#line-numbers */
 pre > code {
   counter-reset: line;
+  @apply overflow-x-auto;
 }
 
 pre > code > [data-line]::before {
@@ -10,7 +11,7 @@ pre > code > [data-line]::before {
   /* Other styling */
   display: inline-block;
   width: 1rem;
-  margin-right: 2rem;
+  margin-right: 1rem;
   text-align: right;
   color: gray;
 }
@@ -29,16 +30,14 @@ pre {
   @apply px-2;
 }
 
-p > code {
-  @apply rounded-md;
-  @apply bg-muted;
+code > span {
   @apply px-2;
-  @apply py-1;
+  @apply py-0.5;
+  @apply text-sm;
 }
 
 [data-highlighted-line] {
   background: rgba(200, 200, 255, 0.1);
-  @apply opacity-60;
 }
 
 [data-highlighted-line-id="add"] {

@@ -24,16 +24,23 @@ const articles = import.meta.glob<MDX>("../articles/**/*.mdx", {
 })
 
 export const getArticles = (): Article[] => {
-  return Object.entries(articles).map(([path, article]) => {
-    const match = path.match(/([^/]+)\.mdx$/)
-    if (!match) throw new Error(`Invalid path, ${path}`)
+  return Object.entries(articles)
+    .map(([path, article]) => {
+      const match = path.match(/([^/]+)\.mdx$/)
+      if (!match) throw new Error(`Invalid path, ${path}`)
 
-    return {
-      slug: match[1],
-      frontmatter: article.frontmatter,
-      Component: article.default,
-    }
-  })
+      return {
+        slug: match[1],
+        frontmatter: article.frontmatter,
+        Component: article.default,
+      }
+    })
+    .sort((a, b) => {
+      return (
+        new Date(b.frontmatter.publishedAt).getTime() -
+        new Date(a.frontmatter.publishedAt).getTime()
+      )
+    })
 }
 
 export const getArticle = (slug: string): Article | undefined => {
