@@ -11,7 +11,9 @@ export const Header = () => {
       </a>
       <ul className={links()}>
         <li>About</li>
-        <li>Category</li>
+        <li>
+          <a href="/tags">Tags</a>
+        </li>
         <ThemeButton />
       </ul>
     </header>
