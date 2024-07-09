@@ -10,9 +10,15 @@ export const Header = () => {
         <h1 className={title()}>Suna's Box</h1>
       </a>
       <ul className={links()}>
-        <li>About</li>
         <li>
-          <a href="/tags">Tags</a>
+          <a href="/about">
+            <h2>About</h2>
+          </a>
+        </li>
+        <li>
+          <a href="/tags">
+            <h2>Tags</h2>
+          </a>
         </li>
         <ThemeButton />
       </ul>
@@ -25,7 +31,7 @@ const header = tv(
     slots: {
       base: "flex h-20 items-center justify-between w-full bg-background px-20 py-4",
       title: "text-primary font-bold",
-      links: "flex gap-4 items-center",
+      links: "flex gap-8 items-center",
     },
   },
   {
