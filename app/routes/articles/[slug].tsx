@@ -4,6 +4,7 @@ import { getArticle, getArticles } from "../../functions/articles"
 import { Card } from "@/components/parts/Card"
 import { Badge } from "@/components/parts/Badge"
 import { ArticleIconMap } from "@/constants/articleIconMap"
+import { BuyMeCoffee } from "@/components/projects/BuyMeCoffee"
 
 export default createRoute(
   ssgParams(() =>
@@ -16,7 +17,7 @@ export default createRoute(
     if (!article) return c.redirect("/404")
 
     return c.render(
-      <div className="mx-32 ">
+      <div className="flex flex-col gap-8 mx-32">
         <Card>
           <article className="flex flex-col gap-8 leading-8">
             <h1 className="font-bold text-primary">
@@ -29,6 +30,9 @@ export default createRoute(
             </div>
             {article.Component()}
           </article>
+        </Card>
+        <Card>
+          <BuyMeCoffee />
         </Card>
       </div>,
       {
