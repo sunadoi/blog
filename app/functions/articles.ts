@@ -61,3 +61,9 @@ export const getArticles = (): { articles: Article[]; tagCount: Tag } => {
 export const getArticle = (slug: string): Article | undefined => {
   return getArticles().articles.find((article) => article.slug === slug)
 }
+
+export const getArticlesByTag = (tag: string): Article[] => {
+  return getArticles().articles.filter((article) =>
+    article.frontmatter.tags.includes(tag as ArticleIconKey),
+  )
+}

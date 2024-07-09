@@ -40,7 +40,7 @@ export default createRoute(async (c) => {
       </div>
     </div>,
     {
-      title: "tag一覧",
+      title: "Tag一覧",
     },
   )
 })

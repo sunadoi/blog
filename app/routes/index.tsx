@@ -8,8 +8,8 @@ export default createRoute((c) => {
   const { articles, tagCount } = getArticles()
 
   return c.render(
-    <div className="grid grid-cols-3 gap-4">
-      <dig className="col-span-2">
+    <div className="grid grid-cols-4 gap-4">
+      <dig className="col-span-3">
         <Card>
           <h2>Articles</h2>
           <div className="py-4" />
@@ -36,11 +36,16 @@ export default createRoute((c) => {
           {Object.entries(tagCount).map(([tag, count]) => {
             const icon = ArticleIconMap.get(tag as ArticleIconKey)
             return (
-              <li className="flex gap-2">
-                {icon && <img src={icon} alt="" width={24} height={24} />}
-                <span>
-                  {tag} ({count})
-                </span>
+              <li>
+                <a
+                  href={`/tags/${tag}`}
+                  className="flex gap-2 hover:opacity-80"
+                >
+                  {icon && <img src={icon} alt="" width={24} height={24} />}
+                  <span>
+                    {tag} ({count})
+                  </span>
+                </a>
               </li>
             )
           })}

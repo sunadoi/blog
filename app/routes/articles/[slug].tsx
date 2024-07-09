@@ -25,7 +25,9 @@ export default createRoute(
             </h1>
             <div className="flex gap-4">
               {article.frontmatter.tags.map((tag) => (
-                <Badge icon={ArticleIconMap.get(tag) ?? ""}>{tag}</Badge>
+                <a href={`/tags/${tag}`}>
+                  <Badge icon={ArticleIconMap.get(tag) ?? ""}>{tag}</Badge>
+                </a>
               ))}
             </div>
             {article.Component()}
