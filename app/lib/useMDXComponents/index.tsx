@@ -39,7 +39,7 @@ export function useMDXComponents(): MDXComponents {
 
       return (
         <figcaption
-          className="flex gap-2 text-slate-100 bg-slate-600 rounded-md rounded-b-none px-4 w-fit"
+          className="flex gap-2 text-slate-100 bg-slate-600 rounded-md rounded-b-none px-3 w-fit"
           {...props}
         >
           {icon && <img src={icon} alt="" width={16} height={16} />}

@@ -14,7 +14,7 @@ type Tag = {
 type Frontmatter = {
   title: string
   icon: ArticleIconKey
-  tags: string[]
+  tags: ArticleIconKey[]
   publishedAt: string
 }
 
@@ -34,7 +34,9 @@ export const getArticles = (): { articles: Article[]; tagCount: Tag } => {
       const match = path.match(/([^/]+)\.mdx$/)
       if (!match) throw new Error(`Invalid path, ${path}`)
 
-      const tags = file.frontmatter.tags.split(",")
+      const tags: ArticleIconKey[] = file.frontmatter.tags.split(
+        ",",
+      ) as ArticleIconKey[]
 
       for (const tag of tags) {
         tagCount[tag] = (tagCount[tag] || 0) + 1

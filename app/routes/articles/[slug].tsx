@@ -1,6 +1,9 @@
 import { ssgParams } from "hono/ssg"
 import { createRoute } from "honox/factory"
 import { getArticle, getArticles } from "../../functions/articles"
+import { Card } from "@/components/parts/Card"
+import { Badge } from "@/components/parts/Badge"
+import { ArticleIconMap } from "@/constants/articleIconMap"
 
 export default createRoute(
   ssgParams(() =>
@@ -13,13 +16,20 @@ export default createRoute(
     if (!article) return c.redirect("/404")
 
     return c.render(
-      <div>
-        <article className="flex flex-col mx-32 gap-8 leading-8">
-          <h1 className="font-bold text-primary">
-            {article.frontmatter.title}
-          </h1>
-          {article.Component()}
-        </article>
+      <div className="mx-32 ">
+        <Card>
+          <article className="flex flex-col gap-8 leading-8">
+            <h1 className="font-bold text-primary">
+              {article.frontmatter.title}
+            </h1>
+            <div className="flex gap-4">
+              {article.frontmatter.tags.map((tag) => (
+                <Badge icon={ArticleIconMap.get(tag) ?? ""}>{tag}</Badge>
+              ))}
+            </div>
+            {article.Component()}
+          </article>
+        </Card>
       </div>,
       {
         title: article?.frontmatter.title,

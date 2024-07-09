@@ -15,7 +15,7 @@ export default createRoute((c) => {
           <div className="py-4" />
           <ul className="flex flex-col gap-4">
             {articles.map((article) => (
-              <li key={article.slug}>
+              <li>
                 <a href={`articles/${article.slug}`}>
                   <ArticleCard
                     title={article.frontmatter.title}
@@ -36,7 +36,7 @@ export default createRoute((c) => {
           {Object.entries(tagCount).map(([tag, count]) => {
             const icon = ArticleIconMap.get(tag as ArticleIconKey)
             return (
-              <li key={tag} className="flex gap-2">
+              <li className="flex gap-2">
                 {icon && <img src={icon} alt="" width={24} height={24} />}
                 <span>
                   {tag} ({count})
