@@ -2,26 +2,30 @@ import { tv } from "tailwind-variants"
 import { ThemeButton } from "../parts/_Theme.island"
 
 export const Header = () => {
-  const { base, title, links } = header()
+  const { base, title, links } = header({
+    linksDisplay: { initial: "hidden", sm: "visible" },
+  })
 
   return (
     <header className={base()}>
       <a href="/">
         <h1 className={title()}>Suna's Box</h1>
       </a>
-      <ul className={links()}>
-        <li>
-          <a href="/about">
-            <h2>About</h2>
-          </a>
-        </li>
-        <li>
-          <a href="/tags">
-            <h2>Tags</h2>
-          </a>
-        </li>
+      <div class="flex items-center gap-8">
+        <ul className={links()}>
+          <li>
+            <a href="/about">
+              <h2>About</h2>
+            </a>
+          </li>
+          <li>
+            <a href="/tags">
+              <h2>Tags</h2>
+            </a>
+          </li>
+        </ul>
         <ThemeButton />
-      </ul>
+      </div>
     </header>
   )
 }
@@ -29,9 +33,23 @@ export const Header = () => {
 const header = tv(
   {
     slots: {
-      base: "flex h-20 items-center justify-between w-full bg-background px-20 py-4",
+      base: "flex border-b-2 items-center justify-between w-full bg-background py-4",
       title: "text-primary font-bold",
-      links: "flex gap-8 items-center",
+      links: "",
+    },
+    variants: {
+      linksDisplay: {
+        hidden: {
+          base: "h-16",
+          title: "text-lg",
+          links: "hidden",
+        },
+        visible: {
+          base: "h-20",
+          title: "text-3xl",
+          links: "flex gap-8 items-center",
+        },
+      },
     },
   },
   {

@@ -1,7 +1,8 @@
+const { withTV } = require("tailwind-variants/transformer");
 const { createPlugin } = require("windy-radix-palette");
 
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+module.exports = withTV({
   darkMode: ["class"],
   content: [
     "./pages/**/*.{ts,tsx}",
@@ -76,4 +77,4 @@ module.exports = {
     },
   },
   plugins: [createPlugin().plugin],
-};
+});

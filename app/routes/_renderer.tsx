@@ -22,9 +22,9 @@ export default jsxRenderer(({ children, title }) => {
         )}
         {title && <title>{title}</title>}
       </head>
-      <body class="flex flex-col min-h-screen">
+      <body class="flex flex-col mx-4 sm:mx-20">
         <Header />
-        <main className="flex-grow px-20 py-10">{children}</main>
+        <main className="flex-grow py-10">{children}</main>
         <Footer />
       </body>
     </html>
