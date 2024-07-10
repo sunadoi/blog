@@ -1,7 +1,7 @@
 import { Header } from "@/components/projects/Header"
-import { ThemeButton } from "@/components/parts/_Theme.island"
 import { jsxRenderer } from "hono/jsx-renderer"
 import { Script } from "honox/server"
+import { Footer } from "@/components/projects/Footer"
 
 export default jsxRenderer(({ children, title }) => {
   return (
@@ -22,9 +22,10 @@ export default jsxRenderer(({ children, title }) => {
         )}
         {title && <title>{title}</title>}
       </head>
-      <body>
+      <body class="flex flex-col min-h-screen">
         <Header />
-        <main className="px-20 py-10">{children}</main>
+        <main className="flex-grow px-20 py-10">{children}</main>
+        <Footer />
       </body>
     </html>
   )
