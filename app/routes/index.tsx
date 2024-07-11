@@ -9,7 +9,7 @@ export default createRoute((c) => {
 
   return c.render(
     <div className="grid grid-cols-4 gap-4">
-      <dig className="col-span-3">
+      <div className="col-span-4 md:col-span-3">
         <Card>
           <h2>Articles</h2>
           <div className="py-4" />
@@ -28,29 +28,31 @@ export default createRoute((c) => {
             ))}
           </ul>
         </Card>
-      </dig>
-      <Card>
-        <h2>Tags</h2>
-        <div className="py-4" />
-        <ul className="flex flex-col gap-4">
-          {Object.entries(tagCount).map(([tag, count]) => {
-            const icon = ArticleIconMap.get(tag as ArticleIconKey)
-            return (
-              <li>
-                <a
-                  href={`/tags/${tag}`}
-                  className="flex gap-2 hover:opacity-80"
-                >
-                  {icon && <img src={icon} alt="" width={24} height={24} />}
-                  <span>
-                    {tag} ({count})
-                  </span>
-                </a>
-              </li>
-            )
-          })}
-        </ul>
-      </Card>
+      </div>
+      <div class="hidden md:block col-span-1">
+        <Card>
+          <h2>Tags</h2>
+          <div className="py-4" />
+          <ul className="flex flex-col gap-4">
+            {Object.entries(tagCount).map(([tag, count]) => {
+              const icon = ArticleIconMap.get(tag as ArticleIconKey)
+              return (
+                <li>
+                  <a
+                    href={`/tags/${tag}`}
+                    className="flex gap-2 hover:opacity-80"
+                  >
+                    {icon && <img src={icon} alt="" width={24} height={24} />}
+                    <span>
+                      {tag} ({count})
+                    </span>
+                  </a>
+                </li>
+              )
+            })}
+          </ul>
+        </Card>
+      </div>
     </div>,
   )
 })

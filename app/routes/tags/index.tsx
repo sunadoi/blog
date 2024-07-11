@@ -10,7 +10,7 @@ export default createRoute(async (c) => {
   return c.render(
     <div className="flex flex-col gap-8">
       <h1>Tags</h1>
-      <div className="grid grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         {Object.entries(tagCount)
           .sort((a, b) => b[1] - a[1])
           .map(([tag, count]) => {

@@ -12,7 +12,7 @@ export default createRoute(
     const articles = await getArticlesByTag(tag)
 
     return c.render(
-      <div className="grid grid-cols-2">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {articles.map((article) => (
           <a href={`/articles/${article.slug}`}>
             <ArticleCard
