@@ -1,33 +1,33 @@
 @layer base {
   :root {
-    --background: var(--indigo1);
+    --background: var(--blue1);
     --foreground: var(--slate12);
 
-    --primary: var(--indigo11);
-    --primary-foreground: var(--indigo3);
+    --primary: var(--blue11);
+    --primary-foreground: var(--blue3);
 
-    --secondary: var(--indigo3);
-    --secondary-foreground: var(--indigo-a11);
+    --secondary: var(--blue3);
+    --secondary-foreground: var(--blue-a11);
 
-    --accent: var(--indigo4);
-    --accent-foreground: var(--indigo12);
+    --accent: var(--blue4);
+    --accent-foreground: var(--blue12);
 
-    --popover: var(--indigo3);
-    --popover-foreground: var(--indigo12);
+    --popover: var(--blue3);
+    --popover-foreground: var(--blue12);
 
-    --card: var(--indigo2);
-    --card-foreground: var(--indigo12);
+    --card: var(--blue2);
+    --card-foreground: var(--blue12);
 
-    --muted: var(--indigo3);
-    --muted-foreground: var(--indigo6);
+    --muted: var(--blue3);
+    --muted-foreground: var(--blue6);
 
-    --border: var(--indigo6);
-    --input: var(--indigo7);
+    --border: var(--blue6);
+    --input: var(--blue7);
 
     --destructive: 0 100% 50%;
     --destructive-foreground: 210 40% 98%;
 
-    --ring: var(--indigo8);
+    --ring: var(--blue8);
 
     --radius: 0.5rem;
   }

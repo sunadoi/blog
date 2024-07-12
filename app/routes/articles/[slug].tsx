@@ -18,24 +18,18 @@ export default createRoute(
 
     return c.render(
       <div className="flex flex-col gap-8 lg:mx-32">
-        <Card>
-          <article className="flex flex-col gap-8 leading-8">
-            <h1 className="font-bold text-primary">
-              {article.frontmatter.title}
-            </h1>
-            <div className="flex gap-4">
-              {article.frontmatter.tags.map((tag) => (
-                <a href={`/tags/${tag}`}>
-                  <Badge icon={ArticleIconMap.get(tag) ?? ""}>{tag}</Badge>
-                </a>
-              ))}
-            </div>
-            {article.Component()}
-          </article>
-        </Card>
-        <Card>
-          <BuyMeCoffee />
-        </Card>
+        <article className="flex flex-col gap-8 leading-8">
+          <h1 className="font-medium">{article.frontmatter.title}</h1>
+          <div className="flex gap-4">
+            {article.frontmatter.tags.map((tag) => (
+              <a href={`/tags/${tag}`}>
+                <Badge icon={ArticleIconMap.get(tag) ?? ""}>{tag}</Badge>
+              </a>
+            ))}
+          </div>
+          {article.Component()}
+        </article>
+        <BuyMeCoffee />
       </div>,
       {
         title: article?.frontmatter.title,

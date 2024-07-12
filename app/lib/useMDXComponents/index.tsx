@@ -6,15 +6,12 @@ import { EmbedLink } from "./EmbedLink"
 export function useMDXComponents(): MDXComponents {
   return {
     h2: (props) => (
-      <h2
-        className="bg-accent text-accent-foreground px-3 py-4 rounded-md"
-        {...props}
-      >
+      <h2 className="font-bold py-2 border-b-2" {...props}>
         {props.children}
       </h2>
     ),
     h3: (props) => (
-      <h3 className="border-b-2 text-accent-foreground px-3 py-2" {...props}>
+      <h3 className="font-bold -mb-4" {...props}>
         {props.children}
       </h3>
     ),
