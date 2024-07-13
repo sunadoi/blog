@@ -10,7 +10,6 @@ import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
 import rehypePrettyCode from "rehype-pretty-code"
 import { transformerCopyButton } from "@rehype-pretty/transformers"
-import rehypeToc from "rehype-toc"
 import rehypeAutolinkHeadings from "rehype-autolink-headings"
 import rehypeSlug from "rehype-slug"
 
@@ -70,7 +69,6 @@ export default defineConfig(({ mode }) => {
                 },
               ],
               rehypeSlug,
-              [rehypeToc, { headings: ["h2", "h3"], position: "afterbegin" }],
               [rehypeAutolinkHeadings, { behavior: "wrap" }],
             ],
           }),

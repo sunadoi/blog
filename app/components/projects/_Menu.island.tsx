@@ -24,10 +24,10 @@ export const Menu = () => {
         <>
           {/* biome-ignore lint/a11y/useKeyWithClickEvents: */}
           <div
-            class="fixed z-10 bg-transparent w-full h-full"
+            class="fixed z-20 bg-transparent w-full h-full"
             onClick={() => setIsOpen(false)}
           />
-          <div class="fixed z-10 rounded-lg bg-popover bottom-[calc(env(safe-area-inset-bottom,0px)+96px)] left-3 p-2">
+          <div class="fixed z-50 rounded-lg bg-popover bottom-[calc(env(safe-area-inset-bottom,0px)+96px)] left-3 p-2">
             <ul class="flex flex-col gap-4 p-4">
               <li>
                 <a href="/" class="flex items-center gap-2">

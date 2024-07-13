@@ -1,17 +1,29 @@
-.toc {
-  @apply border-y-2;
-  @apply border-y-primary;
-  @apply border-dotted;
-  @apply py-2;
-  @apply px-6;
+.toc, .toc-dialog {
+  line-height: 2;
+  font-size: 0.8rem;
 }
 
-.toc a {
+.toc a, .toc-dialog a {
+  opacity: 0.4;
+  width: 100%;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   @apply hover:opacity-80;
 }
 
-.toc .toc-item-h3::before {
-  content: " ";
-  display: inline-block;
-  width: 2rem;
+.toc .is-active-link, .toc-dialog .is-active-link {
+  opacity: 1;
+  font-weight: 600;
+}
+
+.toc .node-name--H3::before, .toc-dialog .node-name--H3::before {
+  white-space: pre;
+  content: "    ";
+}
+
+.toc .node-name--H4::before, .toc-dialog .node-name--H4::before {
+  white-space: pre;
+  content: "        ";
 }
