@@ -52,3 +52,11 @@ figure[data-rehype-pretty-code-figure]:has(> [data-rehype-pretty-code-title])
   pre {
   @apply !rounded-tl-none;
 }
+
+/* inline code */
+p > code {
+  @apply bg-slate-3;
+  @apply px-2;
+  @apply py-0.5;
+  @apply rounded-md;
+}
