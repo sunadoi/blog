@@ -1,4 +1,6 @@
-import { GitHubIcon, SizumeIcon, XIcon } from "@/components/parts/Icon"
+import { GitHubIcon } from "@/components/parts/icons/GitHub"
+import { XIcon } from "@/components/parts/icons/X"
+import { SizumeIcon } from "@/components/parts/icons/Sizume"
 import { RSSIcon } from "@/components/parts/icons/RSS"
 import { BuyMeCoffee } from "@/components/projects/BuyMeCoffee"
 import { getAssetPath } from "@/functions/assetPath"
@@ -24,21 +26,21 @@ export default createRoute(async (c) => {
             target="_blank"
             rel="noopener noreferrer"
           >
-            <XIcon size={24} />
+            <XIcon width={24} height={24} />
           </a>
           <a
             href="https://github.com/sunadoi"
             target="_blank"
             rel="noopener noreferrer"
           >
-            <GitHubIcon size={24} />
+            <GitHubIcon width={24} height={24} />
           </a>
           <a
             href="https://sizu.me/suna"
             target="_blank"
             rel="noopener noreferrer"
           >
-            <SizumeIcon size={24} />
+            <SizumeIcon width={24} height={24} />
           </a>
         </div>
         <div class="flex flex-col gap-1">
