@@ -1,0 +1,2 @@
+user-agent: *
+Sitemap: https://suna.dev/sitemap.xml
