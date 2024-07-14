@@ -2,6 +2,7 @@ import { Header } from "@/components/projects/Header"
 import { jsxRenderer } from "hono/jsx-renderer"
 import { Script } from "honox/server"
 import { Footer } from "@/components/projects/Footer"
+import { baseURL } from "@/constants/path"
 
 export default jsxRenderer(({ children, title }) => {
   return (
@@ -25,6 +26,12 @@ export default jsxRenderer(({ children, title }) => {
         ) : (
           <link rel="icon" href="/app/public/assets/favicon.ico" />
         )}
+        <link
+          rel="alternate"
+          type="application/rss+xml"
+          title="SunaBox"
+          href={`${baseURL}/feed.xml`}
+        />
         {title && <title>{title}</title>}
       </head>
       <body class="flex flex-col mx-2 sm:mx-20">

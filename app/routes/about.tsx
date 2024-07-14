@@ -1,4 +1,5 @@
 import { GitHubIcon, SizumeIcon, XIcon } from "@/components/parts/Icon"
+import { RSSIcon } from "@/components/parts/icons/RSS"
 import { BuyMeCoffee } from "@/components/projects/BuyMeCoffee"
 import { getAssetPath } from "@/functions/assetPath"
 import { createRoute } from "honox/factory"
@@ -60,7 +61,12 @@ export default createRoute(async (c) => {
         </div>
       </div>
       <div class="flex flex-col gap-8 w-full max-w-md">
-        <h1 class="border-b-2 pb-2">Site</h1>
+        <div class="flex items-center gap-4 border-b-2 pb-2">
+          <h1>Site</h1>
+          <a href="/feed.xml">
+            <RSSIcon width={24} height={24} />
+          </a>
+        </div>
         <div class="leading-8">
           <p>このサイトはHonoXで作られています</p>
           <p>月一程度の更新が目標です</p>

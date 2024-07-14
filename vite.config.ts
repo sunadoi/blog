@@ -79,7 +79,7 @@ export default defineConfig(({ mode }) => {
             generateRobotsTxt: true,
           }),
         ],
-        ssr: { external: ["jsdom"] },
+        ssr: { external: ["jsdom", "feed"] },
         resolve: {
           alias: { "@": path.resolve(__dirname, "./app") },
         },

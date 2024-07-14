@@ -1,4 +1,4 @@
-import type { SVGIcon } from "@/constants/articleIconMap"
+import type { SVGIcon } from "@/types/SVGIcon"
 import clsx from "clsx"
 import type { JSX } from "hono/jsx/jsx-runtime"
 
