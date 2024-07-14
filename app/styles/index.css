@@ -6,9 +6,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ref: https://smarthr.design/basics/typography/website/ */
+@font-face {
+  font-family: AdjustedYuGothic;
+  font-weight: 400;
+  src: local("Yu Gothic Medium");
+}
+
+@font-face {
+  font-family: AdjustedYuGothic;
+  font-weight: 700;
+  src: local("Yu Gothic Bold");
+}
+
 @layer base {
   * {
     @apply border-border;
+  }
+  html {
+    font-family: AdjustedYuGothic, Yu Gothic, YuGothic, sans-serif;
   }
   body {
     @apply bg-background text-foreground;

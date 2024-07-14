@@ -12,8 +12,8 @@ export const EmbedLink = async ({ url }: { url: string }) => {
       rel="noreferrer"
       class="transition-opacity hover:opacity-70"
     >
-      <div class="flex border border-slate-6 rounded-md my-2 h-28">
-        <div class="flex flex-col justify-between gap-2 h-full w-full p-2">
+      <div class="flex border border-slate-6 rounded-md my-2 h-32">
+        <div class="flex flex-col justify-between gap-2 h-full w-full p-4">
           <span class="text-sm font-bold text-ellipsis line-clamp-1">
             {ogp.title}
           </span>
