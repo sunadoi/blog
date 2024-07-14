@@ -24,11 +24,14 @@ export default createRoute(
             <article className="article flex flex-col gap-8 leading-8">
               <h1 className="font-medium">{article.frontmatter.title}</h1>
               <div className="flex gap-4">
-                {article.frontmatter.tags.map((tag) => (
-                  <a href={`/tags/${tag}`}>
-                    <Badge icon={ArticleIconMap.get(tag) ?? ""}>{tag}</Badge>
-                  </a>
-                ))}
+                {article.frontmatter.tags.map((tag) => {
+                  const Icon = ArticleIconMap.get(tag)
+                  return (
+                    <a href={`/tags/${tag}`}>
+                      {Icon && <Badge Icon={Icon}>{tag}</Badge>}
+                    </a>
+                  )
+                })}
               </div>
               {article.Component()}
             </article>

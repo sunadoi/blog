@@ -36,14 +36,14 @@ export function useMDXComponents(): MDXComponents {
     EmbedLink: EmbedLink,
     Img: Img,
     figcaption: (props) => {
-      const icon = FileIconMap.get(props["data-language"])
+      const Icon = FileIconMap.get(props["data-language"])
 
       return (
         <figcaption
-          className="flex gap-2 text-slate-100 bg-slate-600 rounded-md rounded-b-none px-3 w-fit"
+          className="flex items-center gap-2 text-slate-100 bg-slate-600 rounded-md rounded-b-none px-3 w-fit"
           {...props}
         >
-          {icon && <img src={icon} alt="" width={16} height={16} />}
+          {Icon && <Icon width={16} height={16} />}
           {props.children}
         </figcaption>
       )

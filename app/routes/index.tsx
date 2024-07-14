@@ -35,14 +35,14 @@ export default createRoute((c) => {
           <div className="py-4" />
           <ul className="flex flex-col gap-4">
             {Object.entries(tagCount).map(([tag, count]) => {
-              const icon = ArticleIconMap.get(tag as ArticleIconKey)
+              const Icon = ArticleIconMap.get(tag as ArticleIconKey)
               return (
                 <li>
                   <a
                     href={`/tags/${tag}`}
                     className="flex gap-2 hover:opacity-80"
                   >
-                    {icon && <img src={icon} alt="" width={24} height={24} />}
+                    {Icon && <Icon width={24} height={24} />}
                     <span>
                       {tag} ({count})
                     </span>

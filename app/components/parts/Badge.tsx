@@ -1,10 +1,11 @@
+import type { SVGIcon } from "@/constants/articleIconMap"
 import clsx from "clsx"
 import type { JSX } from "hono/jsx/jsx-runtime"
 
 export const Badge = ({
-  icon,
+  Icon,
   children,
-}: JSX.ElementChildrenAttribute & { icon?: string }) => {
+}: JSX.ElementChildrenAttribute & { Icon?: SVGIcon }) => {
   return (
     <div
       className={clsx(
@@ -12,7 +13,7 @@ export const Badge = ({
         "cursor-pointer hover:opacity-80",
       )}
     >
-      {icon && <img src={icon} width={24} height={24} alt="tag-icon" />}
+      {Icon && <Icon width={24} height={24} />}
       <span className="text-sm font-semibold">{children}</span>
     </div>
   )
