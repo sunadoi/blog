@@ -13,6 +13,7 @@ type Tag = {
 
 type Frontmatter = {
   title: string
+  description: string
   icon: ArticleIconKey
   tags: ArticleIconKey[]
   publishedAt: string

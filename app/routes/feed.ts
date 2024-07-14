@@ -31,7 +31,7 @@ export const generateRssFeed = async (): Promise<string> => {
   for (const article of articles) {
     feed.addItem({
       title: article.frontmatter.title,
-      description: "",
+      description: article.frontmatter.description,
       date: new Date(article.frontmatter.publishedAt),
       id: `${baseURL}/articles/${article.slug}`,
       link: `${baseURL}/articles/${article.slug}`,
