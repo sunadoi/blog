@@ -12,6 +12,8 @@ import rehypePrettyCode from "rehype-pretty-code"
 import { transformerCopyButton } from "@rehype-pretty/transformers"
 import rehypeAutolinkHeadings from "rehype-autolink-headings"
 import rehypeSlug from "rehype-slug"
+import Sitemap from "vite-plugin-sitemap"
+import { baseURL } from "./app/constants/path"
 
 export default defineConfig(({ mode }) => {
   return mode === "client"
@@ -71,6 +73,10 @@ export default defineConfig(({ mode }) => {
               rehypeSlug,
               [rehypeAutolinkHeadings, { behavior: "wrap" }],
             ],
+          }),
+          Sitemap({
+            hostname: baseURL,
+            generateRobotsTxt: true,
           }),
         ],
         ssr: { external: ["jsdom"] },

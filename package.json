@@ -40,6 +40,7 @@
     "tailwindcss": "^3.4.4",
     "tocbot": "^4.28.2",
     "vite": "^5.2.12",
+    "vite-plugin-sitemap": "^0.6.2",
     "windy-radix-palette": "^2.0.0-beta.7",
     "wrangler": "^3.57.2"
   }
