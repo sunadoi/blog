@@ -21,7 +21,7 @@
     --muted: var(--blue3);
     --muted-foreground: var(--blue6);
 
-    --border: var(--blue6);
+    --border: var(--slate6);
     --input: var(--blue7);
 
     --destructive: 0 100% 50%;

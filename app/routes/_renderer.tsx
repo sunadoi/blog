@@ -20,6 +20,11 @@ export default jsxRenderer(({ children, title }) => {
         ) : (
           <link href="/app/styles/index.css" rel="stylesheet" />
         )}
+        {import.meta.env.PROD ? (
+          <link rel="icon" href="/assets/favicon.ico" />
+        ) : (
+          <link rel="icon" href="/app/public/assets/favicon.ico" />
+        )}
         {title && <title>{title}</title>}
       </head>
       <body class="flex flex-col mx-2 sm:mx-20">

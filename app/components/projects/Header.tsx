@@ -1,6 +1,7 @@
 import { tv } from "tailwind-variants"
 import { ThemeButton } from "../parts/_Theme.island"
 import { Menu } from "./_Menu.island"
+import { getAssetPath } from "@/functions/assetPath"
 
 export const Header = () => {
   const { base, title, links, menuIcon } = header({
@@ -10,8 +11,14 @@ export const Header = () => {
   return (
     <>
       <header className={base()}>
-        <a href="/">
-          <h1 className={title()}>Suna's Box</h1>
+        <a href="/" class="flex items-center gap-2">
+          <img
+            src={getAssetPath("/assets/favicon.ico")}
+            alt="logo"
+            width="24"
+            height="24"
+          />
+          <h1 className={title()}>SunaBox</h1>
         </a>
         <div class="flex items-center gap-8">
           <ul className={links()}>
