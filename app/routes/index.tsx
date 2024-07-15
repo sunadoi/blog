@@ -1,57 +1,40 @@
 import { createRoute } from "honox/factory"
 import { getArticles } from "../functions/articles"
 import { ArticleCard } from "@/components/projects/ArticleCard"
-import { Card } from "@/components/parts/Card"
-import { type ArticleIconKey, ArticleIconMap } from "@/constants/articleIconMap"
+import type { JSX } from "hono/jsx/jsx-runtime"
 
 export default createRoute((c) => {
-  const { articles, tagCount } = getArticles()
+  const { articles } = getArticles()
 
   return c.render(
-    <div className="grid grid-cols-4 gap-4">
-      <div className="col-span-4 md:col-span-3">
-        <Card display={{ initial: "hidden", sm: "visible" }}>
-          <h2>Articles</h2>
-          <div className="py-4" />
-          <ul className="flex flex-col gap-4">
-            {articles.map((article) => (
-              <li>
-                <a href={`articles/${article.slug}`}>
-                  <ArticleCard
-                    title={article.frontmatter.title}
-                    icon={article.frontmatter.icon}
-                    tags={article.frontmatter.tags}
-                    publishedAt={article.frontmatter.publishedAt}
-                  />
-                </a>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
-      <div class="hidden md:block col-span-1">
-        <Card display={{ initial: "hidden", sm: "visible" }}>
-          <h2>Tags</h2>
-          <div className="py-4" />
-          <ul className="flex flex-col gap-4">
-            {Object.entries(tagCount).map(([tag, count]) => {
-              const Icon = ArticleIconMap.get(tag as ArticleIconKey)
-              return (
-                <li>
-                  <a
-                    href={`/tags/${tag}`}
-                    className="flex gap-2 hover:opacity-80"
-                  >
-                    {Icon && <Icon width={24} height={24} />}
-                    <span>
-                      {tag} ({count})
-                    </span>
-                  </a>
-                </li>
-              )
-            })}
-          </ul>
-        </Card>
+    <div>
+      <h1>Articles</h1>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8 my-4">
+        {articles.reduce((acc, cur, index) => {
+          const prev = articles[index - 1]
+          const prevYear = new Date(prev?.frontmatter.publishedAt).getFullYear()
+          const curYear = new Date(cur.frontmatter.publishedAt).getFullYear()
+
+          if (prevYear !== curYear) {
+            acc.push(
+              <div class="col-span-1 md:col-span-2 before:border before:border-dashed before:border-border before:h-0.5 before:block before:translate-y-3">
+                <span class="relative z-10 bg-background pr-2">{curYear}</span>
+              </div>,
+            )
+          }
+
+          acc.push(
+            <a href={`articles/${cur.slug}`}>
+              <ArticleCard
+                title={cur.frontmatter.title}
+                icon={cur.frontmatter.icon}
+                tags={cur.frontmatter.tags}
+                publishedAt={cur.frontmatter.publishedAt}
+              />
+            </a>,
+          )
+          return acc
+        }, [] as JSX.Element[])}
       </div>
     </div>,
   )
