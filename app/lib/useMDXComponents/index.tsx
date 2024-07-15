@@ -16,6 +16,11 @@ export function useMDXComponents(): MDXComponents {
         {props.children}
       </h3>
     ),
+    h4: (props) => (
+      <h4 className="font-bold -mb-4" {...props}>
+        {props.children}
+      </h4>
+    ),
     ol: (props) => <ol class="list-decimal list-inside">{props.children}</ol>,
     ul: (props) => <ul class="list-disc list-inside">{props.children}</ul>,
     a: (props) => {

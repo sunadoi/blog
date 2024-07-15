@@ -3,7 +3,7 @@ import { Anchor } from "./Anchor"
 
 export const EmbedLink = async ({ url }: { url: string }) => {
   const ogp = await fetchOgp(url)
-  if (!ogp) return <Anchor url={url}>{url}</Anchor>
+  if (!ogp || !ogp.image) return <Anchor href={url}>{url}</Anchor>
 
   return (
     <a

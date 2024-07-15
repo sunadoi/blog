@@ -15,7 +15,9 @@ export const Img = async ({
         src={getAssetPath(src ?? "")}
         alt={alt ?? ""}
       />
-      {caption && <p class="text-sm text-center text-slate-11">{caption}</p>}
+      {caption && (
+        <p class="text-sm text-center text-slate-11 break-words">{caption}</p>
+      )}
     </div>
   )
 }
