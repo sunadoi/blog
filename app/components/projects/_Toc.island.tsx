@@ -9,7 +9,7 @@ export const Toc = () => {
     tocbot.init({
       tocSelector: ".toc",
       contentSelector: ".article",
-      headingSelector: "h2, h3, h4",
+      headingSelector: "h2, h3",
       scrollSmoothOffset: -10,
     })
     return () => tocbot.destroy()
@@ -31,7 +31,7 @@ export const TocButton = () => {
     tocbot.init({
       tocSelector: ".toc-dialog",
       contentSelector: ".article",
-      headingSelector: "h2, h3, h4",
+      headingSelector: "h2, h3",
       scrollSmoothOffset: -10,
     })
     return () => tocbot.destroy()

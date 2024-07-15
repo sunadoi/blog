@@ -10,7 +10,7 @@ type ArticleCardProps = {
 export const ArticleCard = ({ title, icon, publishedAt }: ArticleCardProps) => {
   const Icon = ArticleIconMap.get(icon)
   return (
-    <div className="flex items-center gap-8 border rounded-md px-4 py-2 md:py-4 transition-opacity hover:bg-popover">
+    <div className="flex items-center gap-8 border rounded-lg px-4 py-2 md:py-4 hover:scale-105 duration-150">
       {Icon && <Icon width={64} height={64} />}
       <div className="flex flex-col gap-2 py-2 md:py-4">
         <h3 class="line-clamp-3">{title}</h3>

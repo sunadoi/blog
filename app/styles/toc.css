@@ -1,29 +1,29 @@
-.toc, .toc-dialog {
+.toc-list-item {
   line-height: 2;
   font-size: 0.8rem;
 }
 
-.toc a, .toc-dialog a {
-  opacity: 0.4;
+.toc-list-item a {
+  opacity: 0.6;
   width: 100%;
   display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  @apply hover:opacity-80;
+  @apply hover:opacity-100;
 }
 
-.toc .is-active-link, .toc-dialog .is-active-link {
+.toc-list-item .is-active-link {
   opacity: 1;
   font-weight: 600;
 }
 
-.toc .node-name--H3::before, .toc-dialog .node-name--H3::before {
-  white-space: pre;
-  content: "    ";
+.toc-list-item:has(.node-name--H3.is-active-link) .toc-link.node-name--H2 {
+  opacity: 1;
+  font-weight: 600;
 }
 
-.toc .node-name--H4::before, .toc-dialog .node-name--H4::before {
-  white-space: pre;
-  content: "        ";
+.toc-list-item .node-name--H2::before, .toc-list-item .node-name--H3::before {
+  content: "・ ";
+}
+
+.toc-list-item .node-name--H3 {
+  padding-left: 1.5rem;
 }
