@@ -18,7 +18,7 @@ export default createRoute(async (c) => {
         />
       </div>
       <div class="flex flex-col gap-8 w-full max-w-md">
-        <h1 class="border-b-2 pb-2">Profile</h1>
+        <h1 class="border-b pb-2">Profile</h1>
         <div class="flex items-center gap-8">
           <h2>@すな</h2>
           <a
@@ -63,7 +63,7 @@ export default createRoute(async (c) => {
         </div>
       </div>
       <div class="flex flex-col gap-8 w-full max-w-md">
-        <div class="flex items-center gap-4 border-b-2 pb-2">
+        <div class="flex items-center gap-4 border-b pb-2">
           <h1>Site</h1>
           <a href="/feed.xml">
             <RSSIcon width={24} height={24} />

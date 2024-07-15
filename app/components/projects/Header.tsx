@@ -46,7 +46,7 @@ export const Header = () => {
 const header = tv(
   {
     slots: {
-      base: "flex border-b-2 items-center justify-between w-full bg-background py-4",
+      base: "flex border-b items-center justify-between w-full bg-background py-4",
       title: "font-semibold",
       links: "",
       menuIcon: "",

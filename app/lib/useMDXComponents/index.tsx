@@ -7,7 +7,7 @@ import { Img } from "./Image"
 export function useMDXComponents(): MDXComponents {
   return {
     h2: (props) => (
-      <h2 className="font-bold py-2 border-b-2" {...props}>
+      <h2 className="font-bold py-2 border-b" {...props}>
         {props.children}
       </h2>
     ),

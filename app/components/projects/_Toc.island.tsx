@@ -17,7 +17,7 @@ export const Toc = () => {
 
   return (
     <div>
-      <p class="font-semibold border-b-2 pb-1 mb-2">目次</p>
+      <p class="font-semibold border-b pb-1 mb-2">目次</p>
       {/* tocbotによってここにマウントされる */}
       <div class="toc" />
     </div>
@@ -81,7 +81,7 @@ export const TocButton = () => {
         <Card display="visible">
           {/* biome-ignore lint/a11y/useKeyWithClickEvents: */}
           <div onClick={toggleDialog}>
-            <p class="font-semibold border-b-2 pb-1 mb-2">目次</p>
+            <p class="font-semibold border-b pb-1 mb-2">目次</p>
             {/* tocbotによってここにマウントされる */}
             <div class="toc-dialog" />
           </div>

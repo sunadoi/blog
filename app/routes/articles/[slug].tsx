@@ -23,7 +23,7 @@ export default createRoute(
           <Card display={{ initial: "hidden", sm: "visible" }}>
             <article className="article flex flex-col gap-8 leading-8">
               <h1 className="font-medium">{article.frontmatter.title}</h1>
-              <div class="flex flex-col gap-2 lg:hidden">
+              <div class="flex flex-col gap-2 border-b pb-4 lg:hidden">
                 <time>公開日: {article.frontmatter.publishedAt}</time>
                 <div class="flex gap-4">
                   {article.frontmatter.tags.map((tag) => {
