@@ -23,7 +23,31 @@ export default createRoute(
           <Card display={{ initial: "hidden", sm: "visible" }}>
             <article className="article flex flex-col gap-8 leading-8">
               <h1 className="font-medium">{article.frontmatter.title}</h1>
-              <div className="flex gap-4">
+              <div class="flex flex-col gap-2 lg:hidden">
+                <time>公開日: {article.frontmatter.publishedAt}</time>
+                <div class="flex gap-4">
+                  {article.frontmatter.tags.map((tag) => {
+                    const Icon = ArticleIconMap.get(tag)
+                    return (
+                      <a href={`/tags/${tag}`}>
+                        {Icon && <Badge Icon={Icon}>{tag}</Badge>}
+                      </a>
+                    )
+                  })}
+                </div>
+              </div>
+              {article.Component()}
+            </article>
+          </Card>
+          <Card display="visible">
+            <BuyMeCoffee />
+          </Card>
+        </div>
+        <div class="col-span-2 hidden lg:flex lg:flex-col lg:gap-4">
+          <Card display="visible">
+            <div class="flex flex-col gap-4">
+              <time>公開日: {article.frontmatter.publishedAt}</time>
+              <div>
                 {article.frontmatter.tags.map((tag) => {
                   const Icon = ArticleIconMap.get(tag)
                   return (
@@ -33,17 +57,13 @@ export default createRoute(
                   )
                 })}
               </div>
-              {article.Component()}
-            </article>
+            </div>
           </Card>
-          <Card display="visible">
-            <BuyMeCoffee />
-          </Card>
-        </div>
-        <div class="col-span-2 sticky top-4 max-h-80 hidden lg:block">
-          <Card display="visible">
-            <Toc />
-          </Card>
+          <div class="sticky top-4 max-h-80">
+            <Card display="visible">
+              <Toc />
+            </Card>
+          </div>
         </div>
         <div class="lg:hidden">
           <TocButton />

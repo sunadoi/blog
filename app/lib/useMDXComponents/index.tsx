@@ -12,7 +12,7 @@ export function useMDXComponents(): MDXComponents {
       </h2>
     ),
     h3: (props) => (
-      <h3 className="font-bold -mb-4" {...props}>
+      <h3 className="font-bold py-2 border-b" {...props}>
         {props.children}
       </h3>
     ),

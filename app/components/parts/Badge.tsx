@@ -9,7 +9,7 @@ export const Badge = ({
   return (
     <div
       className={clsx(
-        "inline-flex gap-2 items-center rounded-full border px-4 py-2 bg-card",
+        "inline-flex gap-2 items-center rounded-full border px-3 py-1 bg-card",
         "cursor-pointer hover:opacity-80",
       )}
     >
