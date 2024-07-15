@@ -23,32 +23,32 @@
   * {
     @apply border-border;
   }
+
   html {
     font-family: AdjustedYuGothic, Yu Gothic, YuGothic, sans-serif;
   }
+
   body {
     @apply bg-background text-foreground;
+    height: 100vh;
+    height: 100dvh;
+    box-sizing: border-box;
   }
-}
 
-body {
-  height: 100vh;
-  height: 100dvh;
-  box-sizing: border-box;
-}
+  /* https://min-max-calculator.9elements.com/ */
+  h1 {
+    font-size: clamp(1.25rem, 1.065rem + 0.93vw, 1.875rem);
+  }
 
-h1 {
-  @apply text-3xl;
-}
+  h2 {
+    font-size: clamp(1.25rem, 1.176rem + 0.37vw, 1.5rem);
+  }
 
-h2 {
-  @apply text-2xl;
-}
+  h3 {
+    font-size: clamp(1.125rem, 1.088rem + 0.19vw, 1.25rem);
+  }
 
-h3 {
-  @apply text-xl;
-}
-
-h4 {
-  @apply text-lg;
+  h4 {
+    font-size: clamp(1rem, 0.963rem + 0.19vw, 1.125rem);
+  }
 }
