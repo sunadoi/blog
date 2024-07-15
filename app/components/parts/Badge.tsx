@@ -1,16 +1,21 @@
 import type { SVGIcon } from "@/types/SVGIcon"
 import clsx from "clsx"
 import type { JSX } from "hono/jsx/jsx-runtime"
+import { tv, type VariantProps } from "tailwind-variants"
 
 export const Badge = ({
   Icon,
   children,
-}: JSX.ElementChildrenAttribute & { Icon?: SVGIcon }) => {
+  size = "sm",
+}: JSX.ElementChildrenAttribute &
+  VariantProps<typeof badge> & { Icon?: SVGIcon }) => {
+  const { wide } = badge({ size })
   return (
     <div
       className={clsx(
-        "inline-flex gap-2 items-center rounded-full border px-3 py-1 bg-card",
+        "inline-flex gap-2 items-center rounded-full border py-1 bg-card",
         "cursor-pointer hover:opacity-80",
+        wide(),
       )}
     >
       {Icon && <Icon width={24} height={24} />}
@@ -18,3 +23,19 @@ export const Badge = ({
     </div>
   )
 }
+
+const badge = tv({
+  slots: {
+    wide: "",
+  },
+  variants: {
+    size: {
+      sm: {
+        wide: "px-3",
+      },
+      md: {
+        wide: "px-4",
+      },
+    },
+  },
+})

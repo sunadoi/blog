@@ -52,7 +52,7 @@ export const TocButton = () => {
       <button
         type="button"
         class={clsx(
-          "fixed z-10 border rounded-full bg-popover right-3 p-4",
+          "fixed z-10 border rounded-full bg-card right-3 p-4",
           "bottom-[calc(env(safe-area-inset-bottom,0px)+24px)]",
         )}
         onClick={toggleDialog}
@@ -73,7 +73,7 @@ export const TocButton = () => {
       <dialog
         id="toc-dialog"
         class={clsx(
-          "text-foreground rounded-lg bg-popover overflow-y-scroll w-[90%] sm:w-[70%]",
+          "text-foreground rounded-lg overflow-y-scroll w-[90%] sm:w-[70%]",
           "fixed z-50 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2",
           "foxus:outline-none focus:outline-0",
         )}

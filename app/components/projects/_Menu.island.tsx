@@ -11,7 +11,7 @@ export const Menu = () => {
       <button
         type="button"
         class={clsx(
-          "fixed z-10 border rounded-full bg-popover left-3 p-4",
+          "fixed z-20 border rounded-full bg-card left-3 p-4",
           "bottom-[calc(env(safe-area-inset-bottom,0px)+24px)]",
         )}
         onClick={() => setIsOpen((prev) => !prev)}
@@ -27,7 +27,7 @@ export const Menu = () => {
             class="fixed z-20 bg-transparent w-full h-full"
             onClick={() => setIsOpen(false)}
           />
-          <div class="fixed z-50 rounded-lg bg-popover bottom-[calc(env(safe-area-inset-bottom,0px)+110px)] left-3">
+          <div class="fixed z-50 rounded-lg bottom-[calc(env(safe-area-inset-bottom,0px)+110px)] left-3">
             <Card type="wide" hasBorder>
               <ul class="flex flex-col gap-8 p-4">
                 <li>

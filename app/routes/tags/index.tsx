@@ -24,7 +24,7 @@ export default createRoute(async (c) => {
                     </div>
                     <p className="row-span-1 font-semibold">{tag}</p>
                     <div className="row-span-1">
-                      <Badge>{count}記事</Badge>
+                      <Badge size="md">{count}記事</Badge>
                     </div>
                   </div>
                 </Card>

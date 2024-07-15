@@ -7,7 +7,7 @@ export default createRoute((c) => {
   const { articles } = getArticles()
 
   return c.render(
-    <div class="mx-4 my-10">
+    <div class="mx-4 sm:mx-0 my-10">
       <h1>Articles</h1>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8 my-4">
         {articles.reduce((acc, cur, index) => {
@@ -17,8 +17,10 @@ export default createRoute((c) => {
 
           if (prevYear !== curYear) {
             acc.push(
-              <div class="col-span-1 md:col-span-2 before:border before:border-dashed before:border-border before:h-0.5 before:block before:translate-y-3">
-                <span class="relative z-10 bg-background pr-2">{curYear}</span>
+              <div class="col-span-1 md:col-span-2 before:border before:border-dashed before:border-border before:h-0.5 before:block before:translate-y-4">
+                <span class="text-lg relative z-10 bg-background pr-2">
+                  {curYear}
+                </span>
               </div>,
             )
           }
