@@ -6,7 +6,7 @@ export const Anchor = ({ href, ...props }: JSX.IntrinsicElements["a"]) => {
     <a
       href={href}
       className={clsx(
-        "text-accent-foreground",
+        "text-accent",
         "focus-visible:opacity-80 hover:opacity-80",
       )}
       {...props}

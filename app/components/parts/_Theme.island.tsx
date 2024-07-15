@@ -4,10 +4,12 @@ export const ThemeButton = () => {
 
     if (isDark) {
       localStorage.setItem("theme", "light")
+      document.documentElement.classList.add("light")
       document.documentElement.classList.remove("dark")
     } else {
       localStorage.setItem("theme", "dark")
       document.documentElement.classList.add("dark")
+      document.documentElement.classList.remove("light")
     }
   }
 

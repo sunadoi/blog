@@ -13,7 +13,7 @@ export const Card = ({
 const card = tv(
   {
     slots: {
-      base: "rounded-lg",
+      base: "rounded-lg shadow-md",
     },
     variants: {
       display: {

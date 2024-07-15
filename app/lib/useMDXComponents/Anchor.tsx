@@ -5,7 +5,7 @@ export const Anchor = (props: JSX.IntrinsicElements["a"]) => {
   return (
     <a
       className={clsx(
-        "text-accent-foreground cursor-pointer break-words",
+        "text-accent cursor-pointer break-words",
         "hover:opacity-70",
       )}
       target="_blank"

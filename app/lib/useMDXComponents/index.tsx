@@ -7,17 +7,17 @@ import { Img } from "./Image"
 export function useMDXComponents(): MDXComponents {
   return {
     h2: (props) => (
-      <h2 className="font-bold py-2 border-b" {...props}>
+      <h2 className="font-semibold py-2 border-b" {...props}>
         {props.children}
       </h2>
     ),
     h3: (props) => (
-      <h3 className="font-bold py-2 border-b" {...props}>
+      <h3 className="font-semibold py-2 border-b" {...props}>
         {props.children}
       </h3>
     ),
     h4: (props) => (
-      <h4 className="font-bold -mb-4" {...props}>
+      <h4 className="font-semibold -mb-4" {...props}>
         {props.children}
       </h4>
     ),
@@ -32,7 +32,7 @@ export function useMDXComponents(): MDXComponents {
     },
     blockquote: (props) => (
       <blockquote
-        className="text-slate-11 border-l-4 border-slate-4 pl-4 py-2"
+        className="text-slate-11 border-l-4 border-slate-6 pl-4 py-2"
         {...props}
       >
         {props.children}

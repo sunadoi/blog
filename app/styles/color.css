@@ -1,0 +1,31 @@
+/* slateなどはradix-colors由来 */
+
+@layer base {
+  :root {
+    --border: var(--slate7);
+
+    --primary: var(--blue11);
+
+    --accent: var(--blue11);
+
+    --muted: var(--blue3);
+
+    --input: var(--blue7);
+
+    --ring: var(--blue8);
+
+    --radius: 0.5rem;
+  }
+
+  .light, .light-theme {
+    --background: var(--indigo3);
+    --card: var(--indigo2);
+    --foreground: var(--slate12);
+  }
+
+  .dark, .dark-theme {
+    --background: var(--blue1);
+    --card: #22272E;
+    --foreground: #C5D1DE;
+  }
+}
