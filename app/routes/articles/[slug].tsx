@@ -18,10 +18,10 @@ export default createRoute(
     if (!article) return c.redirect("/404")
 
     return c.render(
-      <div class="grid grid-cols-8 gap-4">
+      <div class="grid grid-cols-8 gap-4 sm:my-10">
         <div className="col-span-8 flex flex-col gap-8 lg:col-span-6">
-          <Card display={{ initial: "hidden", sm: "visible" }}>
-            <article className="article flex flex-col gap-8 leading-8">
+          <Card type={{ initial: "slim", sm: "wide" }}>
+            <article className="article flex flex-col gap-8 leading-8 p-4">
               <h1 className="font-semibold">{article.frontmatter.title}</h1>
               <div class="flex flex-col gap-2 border-b pb-4 lg:hidden">
                 <time>公開日: {article.frontmatter.publishedAt}</time>
@@ -39,12 +39,12 @@ export default createRoute(
               {article.Component()}
             </article>
           </Card>
-          <Card display="visible">
+          <Card type={{ initial: "slim", sm: "wide" }}>
             <BuyMeCoffee />
           </Card>
         </div>
         <div class="col-span-2 hidden lg:flex lg:flex-col lg:gap-4">
-          <Card display="visible">
+          <Card type="wide">
             <div class="flex flex-col gap-4">
               <time>公開日: {article.frontmatter.publishedAt}</time>
               <div>
@@ -60,7 +60,7 @@ export default createRoute(
             </div>
           </Card>
           <div class="sticky top-4 max-h-80">
-            <Card display="visible">
+            <Card type="wide">
               <Toc />
             </Card>
           </div>

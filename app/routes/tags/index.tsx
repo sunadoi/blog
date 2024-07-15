@@ -8,7 +8,7 @@ export default createRoute(async (c) => {
   const { tagCount } = await getArticles()
 
   return c.render(
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8 mx-4 sm:mx-0 my-10">
       <h1>Tags</h1>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         {Object.entries(tagCount)
@@ -17,7 +17,7 @@ export default createRoute(async (c) => {
             const Icon = ArticleIconMap.get(tag as ArticleIconKey)
             return (
               <a className="hover:opacity-70" href={`/tags/${tag}`}>
-                <Card display="visible">
+                <Card type="wide">
                   <div className="grid grid-rows-4 place-items-center gap-2 h-full">
                     <div class="flex items-center row-span-2">
                       {Icon && <Icon width={64} height={64} />}

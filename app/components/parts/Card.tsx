@@ -3,9 +3,9 @@ import { tv, type VariantProps } from "tailwind-variants"
 
 export const Card = ({
   children,
-  display = "hidden",
+  type = "wide",
 }: JSX.ElementChildrenAttribute & VariantProps<typeof card>) => {
-  const { base } = card({ display })
+  const { base } = card({ type })
 
   return <div className={base()}>{children}</div>
 }
@@ -13,15 +13,15 @@ export const Card = ({
 const card = tv(
   {
     slots: {
-      base: "rounded-lg shadow-md",
+      base: "bg-card shadow-md",
     },
     variants: {
-      display: {
-        hidden: {
-          base: "bg-transparent",
+      type: {
+        slim: {
+          base: "",
         },
-        visible: {
-          base: "bg-card p-6",
+        wide: {
+          base: "rounded-lg p-6",
         },
       },
     },

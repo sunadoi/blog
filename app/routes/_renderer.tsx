@@ -49,9 +49,9 @@ export default jsxRenderer(({ children, title, description }) => {
         />
         <title>{pageTitle}</title>
       </head>
-      <body class="flex flex-col mx-4 sm:mx-20">
+      <body class="flex flex-col sm:mx-20">
         <Header />
-        <main className="flex-grow py-10">{children}</main>
+        <main className="flex-grow">{children}</main>
         <Footer />
       </body>
     </html>

@@ -7,7 +7,7 @@ export default createRoute((c) => {
   const { articles } = getArticles()
 
   return c.render(
-    <div>
+    <div class="mx-4 my-10">
       <h1>Articles</h1>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-8 my-4">
         {articles.reduce((acc, cur, index) => {

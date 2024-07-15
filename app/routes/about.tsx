@@ -8,7 +8,7 @@ import { createRoute } from "honox/factory"
 
 export default createRoute(async (c) => {
   return c.render(
-    <div class="grid place-items-center gap-20 my-10">
+    <div class="grid place-items-center gap-20 my-10 mx-4">
       <div>
         <img
           src={getAssetPath("/assets/me.webp")}
