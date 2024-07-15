@@ -78,7 +78,7 @@ export const TocButton = () => {
           "foxus:outline-none focus:outline-0",
         )}
       >
-        <Card type="wide">
+        <Card type="wide" hasBorder>
           {/* biome-ignore lint/a11y/useKeyWithClickEvents: */}
           <div onClick={toggleDialog}>
             <p class="font-semibold border-b pb-1 mb-2">目次</p>

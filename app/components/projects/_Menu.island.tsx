@@ -1,6 +1,7 @@
 import clsx from "clsx"
 import { useState } from "hono/jsx"
 import { LinkIcon } from "../parts/icons/Link"
+import { Card } from "../parts/Card"
 
 export const Menu = () => {
   const [isOpen, setIsOpen] = useState(false)
@@ -26,27 +27,29 @@ export const Menu = () => {
             class="fixed z-20 bg-transparent w-full h-full"
             onClick={() => setIsOpen(false)}
           />
-          <div class="fixed z-50 rounded-lg bg-popover bottom-[calc(env(safe-area-inset-bottom,0px)+110px)] left-3 p-2">
-            <ul class="flex flex-col gap-8 p-4">
-              <li>
-                <a href="/" class="flex items-center gap-2">
-                  <HomeIcon />
-                  <p>Home</p>
-                </a>
-              </li>
-              <li>
-                <a href="/about" class="flex items-center gap-2">
-                  <AccountIcon />
-                  <p>About</p>
-                </a>
-              </li>
-              <li>
-                <a href="/tags" class="flex items-center gap-2">
-                  <TagsIcon />
-                  <p>Tags</p>
-                </a>
-              </li>
-            </ul>
+          <div class="fixed z-50 rounded-lg bg-popover bottom-[calc(env(safe-area-inset-bottom,0px)+110px)] left-3">
+            <Card type="wide" hasBorder>
+              <ul class="flex flex-col gap-8 p-4">
+                <li>
+                  <a href="/" class="flex items-center gap-2">
+                    <HomeIcon />
+                    <p>Home</p>
+                  </a>
+                </li>
+                <li>
+                  <a href="/about" class="flex items-center gap-2">
+                    <AccountIcon />
+                    <p>About</p>
+                  </a>
+                </li>
+                <li>
+                  <a href="/tags" class="flex items-center gap-2">
+                    <TagsIcon />
+                    <p>Tags</p>
+                  </a>
+                </li>
+              </ul>
+            </Card>
           </div>
         </>
       )}

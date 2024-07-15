@@ -4,8 +4,9 @@ import { tv, type VariantProps } from "tailwind-variants"
 export const Card = ({
   children,
   type = "wide",
+  hasBorder = false,
 }: JSX.ElementChildrenAttribute & VariantProps<typeof card>) => {
-  const { base } = card({ type })
+  const { base } = card({ type, hasBorder })
 
   return <div className={base()}>{children}</div>
 }
@@ -22,6 +23,14 @@ const card = tv(
         },
         wide: {
           base: "rounded-lg p-6",
+        },
+      },
+      hasBorder: {
+        false: {
+          base: "",
+        },
+        true: {
+          base: "border",
         },
       },
     },
