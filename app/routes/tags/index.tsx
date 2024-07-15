@@ -17,7 +17,7 @@ export default createRoute(async (c) => {
             const Icon = ArticleIconMap.get(tag as ArticleIconKey)
             return (
               <a className="hover:opacity-70" href={`/tags/${tag}`}>
-                <Card>
+                <Card display="visible">
                   <div className="grid grid-rows-4 place-items-center gap-2 h-full">
                     <div class="flex items-center row-span-2">
                       {Icon && <Icon width={64} height={64} />}

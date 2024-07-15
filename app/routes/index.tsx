@@ -10,7 +10,7 @@ export default createRoute((c) => {
   return c.render(
     <div className="grid grid-cols-4 gap-4">
       <div className="col-span-4 md:col-span-3">
-        <Card>
+        <Card display={{ initial: "hidden", sm: "visible" }}>
           <h2>Articles</h2>
           <div className="py-4" />
           <ul className="flex flex-col gap-4">
@@ -30,7 +30,7 @@ export default createRoute((c) => {
         </Card>
       </div>
       <div class="hidden md:block col-span-1">
-        <Card>
+        <Card display={{ initial: "hidden", sm: "visible" }}>
           <h2>Tags</h2>
           <div className="py-4" />
           <ul className="flex flex-col gap-4">

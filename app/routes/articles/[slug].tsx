@@ -20,7 +20,7 @@ export default createRoute(
     return c.render(
       <div class="grid grid-cols-8 gap-4">
         <div className="col-span-8 flex flex-col gap-8 lg:col-span-6">
-          <Card>
+          <Card display={{ initial: "hidden", sm: "visible" }}>
             <article className="article flex flex-col gap-8 leading-8">
               <h1 className="font-medium">{article.frontmatter.title}</h1>
               <div className="flex gap-4">
@@ -36,12 +36,12 @@ export default createRoute(
               {article.Component()}
             </article>
           </Card>
-          <Card>
+          <Card display="visible">
             <BuyMeCoffee />
           </Card>
         </div>
         <div class="col-span-2 sticky top-4 max-h-80 hidden lg:block">
-          <Card>
+          <Card display="visible">
             <Toc />
           </Card>
         </div>

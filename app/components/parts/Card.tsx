@@ -1,5 +1,32 @@
 import type { JSX } from "hono/jsx/jsx-runtime"
+import { tv, type VariantProps } from "tailwind-variants"
 
-export const Card = ({ children }: JSX.ElementChildrenAttribute) => {
-  return <div className="rounded-lg bg-card p-2 sm:p-6">{children}</div>
+export const Card = ({
+  children,
+  display = "hidden",
+}: JSX.ElementChildrenAttribute & VariantProps<typeof card>) => {
+  const { base } = card({ display })
+
+  return <div className={base()}>{children}</div>
 }
+
+const card = tv(
+  {
+    slots: {
+      base: "rounded-lg",
+    },
+    variants: {
+      display: {
+        hidden: {
+          base: "bg-transparent",
+        },
+        visible: {
+          base: "bg-card p-6",
+        },
+      },
+    },
+  },
+  {
+    responsiveVariants: ["sm"],
+  },
+)
