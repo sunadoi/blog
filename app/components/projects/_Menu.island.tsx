@@ -1,5 +1,6 @@
 import clsx from "clsx"
 import { useState } from "hono/jsx"
+import { LinkIcon } from "../parts/icons/Link"
 
 export const Menu = () => {
   const [isOpen, setIsOpen] = useState(false)
@@ -9,15 +10,13 @@ export const Menu = () => {
       <button
         type="button"
         class={clsx(
-          "fixed z-10 border rounded-full bg-popover left-3 p-5",
+          "fixed z-10 border rounded-full bg-popover left-3 p-4",
           "bottom-[calc(env(safe-area-inset-bottom,0px)+24px)]",
         )}
         onClick={() => setIsOpen((prev) => !prev)}
       >
-        <div class="flex flex-col justify-around w-8 h-8">
-          <span class="w-full h-0.5 bg-foreground" />
-          <span class="w-full h-0.5 bg-foreground" />
-          <span class="w-full h-0.5 bg-foreground" />
+        <div class="w-full h-full">
+          <LinkIcon width={32} height={32} />
         </div>
       </button>
       {isOpen && (
@@ -27,8 +26,8 @@ export const Menu = () => {
             class="fixed z-20 bg-transparent w-full h-full"
             onClick={() => setIsOpen(false)}
           />
-          <div class="fixed z-50 rounded-lg bg-popover bottom-[calc(env(safe-area-inset-bottom,0px)+96px)] left-3 p-2">
-            <ul class="flex flex-col gap-4 p-4">
+          <div class="fixed z-50 rounded-lg bg-popover bottom-[calc(env(safe-area-inset-bottom,0px)+110px)] left-3 p-2">
+            <ul class="flex flex-col gap-8 p-4">
               <li>
                 <a href="/" class="flex items-center gap-2">
                   <HomeIcon />

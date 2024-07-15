@@ -2,6 +2,7 @@ import clsx from "clsx"
 import { useEffect, useState } from "hono/jsx"
 import tocbot from "tocbot"
 import { Card } from "../parts/Card"
+import { TocIcon } from "../parts/icons/Toc"
 
 export const Toc = () => {
   useEffect(() => {
@@ -51,13 +52,13 @@ export const TocButton = () => {
       <button
         type="button"
         class={clsx(
-          "fixed z-10 border rounded-full bg-popover right-3 p-5",
+          "fixed z-10 border rounded-full bg-popover right-3 p-4",
           "bottom-[calc(env(safe-area-inset-bottom,0px)+24px)]",
         )}
         onClick={toggleDialog}
       >
-        <div class="flex flex-col justify-around w-8 h-8">
-          <p>目次</p>
+        <div class="w-full h-full">
+          <TocIcon width={32} height={32} />
         </div>
       </button>
       {isOpen && (
@@ -74,6 +75,7 @@ export const TocButton = () => {
         class={clsx(
           "text-foreground rounded-lg bg-popover overflow-y-scroll w-[90%] sm:w-[70%]",
           "fixed z-50 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2",
+          "foxus:outline-none focus:outline-0",
         )}
       >
         <Card>
