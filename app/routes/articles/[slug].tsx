@@ -51,6 +51,7 @@ export default createRoute(
       </div>,
       {
         title: article?.frontmatter.title,
+        description: article?.frontmatter.description,
       },
     )
   },
