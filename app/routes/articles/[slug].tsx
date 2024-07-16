@@ -30,7 +30,11 @@ export default createRoute(
                     const Icon = ArticleIconMap.get(tag)
                     return (
                       <a href={`/tags/${tag}`}>
-                        {Icon && <Badge Icon={Icon}>{tag}</Badge>}
+                        {Icon && (
+                          <Badge Icon={Icon} clickable={true}>
+                            {tag}
+                          </Badge>
+                        )}
                       </a>
                     )
                   })}
@@ -52,7 +56,11 @@ export default createRoute(
                   const Icon = ArticleIconMap.get(tag)
                   return (
                     <a href={`/tags/${tag}`}>
-                      {Icon && <Badge Icon={Icon}>{tag}</Badge>}
+                      {Icon && (
+                        <Badge Icon={Icon} clickable={true}>
+                          {tag}
+                        </Badge>
+                      )}
                     </a>
                   )
                 })}

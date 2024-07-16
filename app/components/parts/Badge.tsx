@@ -7,14 +7,15 @@ export const Badge = ({
   Icon,
   children,
   size = "sm",
+  clickable = false,
 }: JSX.ElementChildrenAttribute &
   VariantProps<typeof badge> & { Icon?: SVGIcon }) => {
-  const { wide } = badge({ size })
+  const { wide, hover } = badge({ size, clickable })
   return (
     <div
       className={clsx(
         "inline-flex gap-2 items-center rounded-full border py-1 bg-card",
-        "cursor-pointer hover:opacity-80",
+        hover(),
         wide(),
       )}
     >
@@ -27,6 +28,7 @@ export const Badge = ({
 const badge = tv({
   slots: {
     wide: "",
+    hover: "",
   },
   variants: {
     size: {
@@ -35,6 +37,14 @@ const badge = tv({
       },
       md: {
         wide: "px-4",
+      },
+    },
+    clickable: {
+      true: {
+        hover: "hover:scale-110 duration-150",
+      },
+      false: {
+        hover: "",
       },
     },
   },

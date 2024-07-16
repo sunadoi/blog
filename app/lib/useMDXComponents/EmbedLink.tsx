@@ -10,7 +10,7 @@ export const EmbedLink = async ({ url }: { url: string }) => {
       href={url}
       target="_blank"
       rel="noreferrer"
-      class="transition-opacity hover:opacity-70"
+      class="transition-opacity hover:opacity-80"
     >
       <div class="flex border border-slate-6 rounded-md my-2 h-32">
         <div class="flex flex-col justify-between gap-2 h-full w-full p-4">

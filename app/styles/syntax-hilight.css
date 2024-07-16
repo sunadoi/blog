@@ -59,4 +59,6 @@ p > code {
   @apply px-2;
   @apply py-0.5;
   @apply rounded-md;
+  @apply bg-slate-4;
+  @apply dark:bg-slate-7;
 }
