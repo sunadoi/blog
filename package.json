@@ -7,7 +7,7 @@
     "check": "biome check app",
     "check:fix": "biome check --write --unsafe app",
     "preview": "vite build --mode client && vite build && wrangler pages dev",
-    "deploy": "vite build --mode client && vite build && wrangler pages deploy"
+    "deploy": "tsc --noEmit && vite build --mode client && vite build && wrangler pages deploy"
   },
   "dependencies": {
     "clsx": "^2.1.1",
