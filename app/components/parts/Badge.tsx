@@ -9,7 +9,7 @@ export const Badge = ({
   size = "sm",
   clickable = false,
 }: JSX.ElementChildrenAttribute &
-  VariantProps<typeof badge> & { Icon?: SVGIcon }) => {
+  VariantProps<typeof badge> & { Icon?: (() => JSX.Element) | string }) => {
   const { wide, hover } = badge({ size, clickable })
   return (
     <div
@@ -19,7 +19,15 @@ export const Badge = ({
         wide(),
       )}
     >
-      {Icon && <Icon width={24} height={24} />}
+      {Icon && (
+        <div class="w-6">
+          {typeof Icon === "string" ? (
+            <span class="grid place-items-center text-sm">{Icon}</span>
+          ) : (
+            <Icon />
+          )}
+        </div>
+      )}
       <span className="text-sm font-semibold">{children}</span>
     </div>
   )

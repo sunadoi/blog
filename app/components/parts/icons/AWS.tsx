@@ -1,6 +1,4 @@
-import type { SVGIcon } from "@/types/SVGIcon"
-
-export const AWSIcon: SVGIcon = ({ width, height }) => {
+export const AWSIcon = () => {
   return (
     <svg
       id="Layer_1"
@@ -12,8 +10,8 @@ export const AWSIcon: SVGIcon = ({ width, height }) => {
         enableBackground: "new 0 0 304 182",
       }}
       xmlSpace="preserve"
-      width={width}
-      height={height}
+      width="100%"
+      height="100%"
     >
       <title>AWS Icon</title>
       <style>

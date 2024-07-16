@@ -10,8 +10,17 @@ type ArticleCardProps = {
 export const ArticleCard = ({ title, icon, publishedAt }: ArticleCardProps) => {
   const Icon = ArticleIconMap.get(icon)
   return (
-    <div className="flex items-center gap-8 bg-card rounded-lg h-full px-4 py-2 md:py-4 hover:scale-105 duration-150 shadow-md">
-      {Icon && <Icon width={64} height={64} />}
+    <div class="flex items-center gap-6 bg-card rounded-lg h-full px-4 py-2 md:py-4 hover:scale-105 duration-150 shadow-md">
+      <div class="shrink-0 w-8 sm:w-16">
+        {Icon &&
+          (typeof Icon === "string" ? (
+            <span class="grid place-items-center text-2xl sm:text-4xl">
+              {Icon}
+            </span>
+          ) : (
+            <Icon />
+          ))}
+      </div>
       <div className="flex flex-col gap-2 py-2 md:py-4">
         <h3 class="line-clamp-3">{title}</h3>
         <p>{publishedAt}</p>

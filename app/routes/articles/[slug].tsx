@@ -51,7 +51,7 @@ export default createRoute(
           <Card type="wide">
             <div class="flex flex-col gap-4">
               <time>公開日: {article.frontmatter.publishedAt}</time>
-              <div>
+              <div class="flex gap-2">
                 {article.frontmatter.tags.map((tag) => {
                   const Icon = ArticleIconMap.get(tag)
                   return (

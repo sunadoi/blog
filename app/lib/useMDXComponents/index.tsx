@@ -48,7 +48,11 @@ export function useMDXComponents(): MDXComponents {
           className="flex items-center gap-2 text-sm py-1 text-slate-100 bg-slate-600 rounded-md rounded-b-none px-3 w-fit"
           {...props}
         >
-          {Icon && <Icon width={16} height={16} />}
+          {Icon && (
+            <div class="w-4">
+              <Icon />
+            </div>
+          )}
           {props.children}
         </figcaption>
       )
