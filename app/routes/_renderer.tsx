@@ -3,9 +3,11 @@ import { jsxRenderer, useRequestContext } from "hono/jsx-renderer"
 import { Script } from "honox/server"
 import { Footer } from "@/components/projects/Footer"
 import { baseURL } from "@/constants/path"
+import { getCanonicalURL } from "@/functions/getCanonicalURL"
 
 export default jsxRenderer(({ children, title, description }) => {
   const pageTitle = title ? `${title} | SunaBox` : "SunaBox"
+  const siteDescription = description ?? "SunaBox is a tech blog"
   const c = useRequestContext()
   const currentUrl = c.req.url
 
@@ -14,14 +16,14 @@ export default jsxRenderer(({ children, title, description }) => {
       <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="description" content={siteDescription} />
+        <meta property="og:site_name" content="SunaBox" />
         <meta property="og:title" content={pageTitle} />
-        <meta
-          property="og:description"
-          content={description ?? "SunaBox is a tech blog"}
-        />
+        <meta property="og:description" content={siteDescription} />
         <meta property="og:url" content={currentUrl} />
         <meta property="og:type" content="article" />
         <meta property="og:image" content={`${baseURL}/assets/favicon.ico`} />
+        <meta property="og:locale:alternate" content="ja_JP" />
         <meta name="twitter:card" content="summary" />
         <meta name="twitter:site" content="@suna_tech" />
         <meta name="twitter:image" content={`${baseURL}/assets/favicon.ico`} />
@@ -41,6 +43,7 @@ export default jsxRenderer(({ children, title, description }) => {
         ) : (
           <link rel="icon" href="/app/public/assets/favicon.ico" />
         )}
+        <link rel="canonical" href={getCanonicalURL(currentUrl)} />
         <link
           rel="alternate"
           type="application/rss+xml"
