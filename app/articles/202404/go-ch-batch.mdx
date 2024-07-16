@@ -9,6 +9,8 @@ publishedAt: 2024/04/16
 
 前回の記事で、非同期でキャッシュを定期的に更新し続けるという手法について紹介しました。
 
+<EmbedLink url="https://suna.dev/articles/cache-strategy-batch" />
+
 goroutineを使って別プロセスで定期的に何らかの処理を実行というのはわりと汎用性のある手法だなと思います。
 今回はその手法を応用して、リクエストごとのDynamoDBへの書き込み処理をバッチ処理にした方法について紹介します。
 
