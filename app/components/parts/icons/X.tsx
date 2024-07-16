@@ -1,11 +1,9 @@
-import type { SVGIcon } from "@/types/SVGIcon"
-
-export const XIcon: SVGIcon = ({ width, height }) => {
+export const XIcon = () => {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      width={width}
-      height={height}
+      width="100%"
+      height="100%"
       class="text-slate-12"
       viewBox="0 0 1200 1227"
     >

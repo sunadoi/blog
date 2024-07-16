@@ -1,4 +1,3 @@
-import type { SVGIcon } from "@/types/SVGIcon"
 import clsx from "clsx"
 import type { JSX } from "hono/jsx/jsx-runtime"
 import { tv, type VariantProps } from "tailwind-variants"

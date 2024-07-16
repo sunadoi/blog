@@ -1,13 +1,12 @@
 import { getAssetPath } from "@/functions/assetPath"
-import type { SVGIcon } from "@/types/SVGIcon"
 
-export const SizumeIcon: SVGIcon = ({ width, height }) => {
+export const SizumeIcon = () => {
   return (
     <img
       src={getAssetPath("/assets/sizume.webp")}
       alt="sizume icon"
-      width={width}
-      height={height}
+      width="100%"
+      height="100%"
     />
   )
 }

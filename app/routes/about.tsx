@@ -29,21 +29,27 @@ export default createRoute(async (c) => {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <XIcon width={24} height={24} />
+                <div class="w-6">
+                  <XIcon />
+                </div>
               </a>
               <a
                 href="https://github.com/sunadoi"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <GitHubIcon width={24} height={24} />
+                <div class="w-6">
+                  <GitHubIcon />
+                </div>
               </a>
               <a
                 href="https://sizu.me/suna"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <SizumeIcon width={24} height={24} />
+                <div class="w-6">
+                  <SizumeIcon />
+                </div>
               </a>
             </div>
             <div class="flex flex-col gap-1">
@@ -73,7 +79,9 @@ export default createRoute(async (c) => {
             <div class="flex items-center gap-4 border-b pb-2">
               <h1>Site</h1>
               <a href="/feed.xml">
-                <RSSIcon width={24} height={24} />
+                <div class="w-6">
+                  <RSSIcon />
+                </div>
               </a>
             </div>
             <div class="leading-8">

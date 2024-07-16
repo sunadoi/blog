@@ -1,11 +1,9 @@
-import type { SVGIcon } from "@/types/SVGIcon"
-
-export const LinkIcon: SVGIcon = ({ width, height }) => {
+export const LinkIcon = () => {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      width={width}
-      height={height}
+      width="100%"
+      height="100%"
       viewBox="0 0 24 24"
     >
       <title>Link Icon</title>

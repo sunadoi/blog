@@ -1,4 +1,4 @@
-export const TocIcon = () => {
+export const HomeIcon = () => {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -6,10 +6,10 @@ export const TocIcon = () => {
       height="100%"
       viewBox="0 0 24 24"
     >
-      <title>Toc Icon</title>
+      <title>Home Icon</title>
       <path
         fill="currentColor"
-        d="M3 9h14V7H3zm0 4h14v-2H3zm0 4h14v-2H3zm16 0h2v-2h-2zm0-10v2h2V7zm0 6h2v-2h-2z"
+        d="m12 5.69l5 4.5V18h-2v-6H9v6H7v-7.81zM12 3L2 12h3v8h6v-6h2v6h6v-8h3"
       />
     </svg>
   )

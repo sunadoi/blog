@@ -1,11 +1,9 @@
-import type { SVGIcon } from "@/types/SVGIcon"
-
-export const GitHubIcon: SVGIcon = ({ width, height }) => {
+export const GitHubIcon = () => {
   return (
     <svg
       viewBox="0 0 256 250"
-      width={width}
-      height={height}
+      width="100%"
+      height="100%"
       fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"
       preserveAspectRatio="xMidYMid"

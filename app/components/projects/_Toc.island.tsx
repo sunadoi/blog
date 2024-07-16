@@ -57,8 +57,8 @@ export const TocButton = () => {
         )}
         onClick={toggleDialog}
       >
-        <div class="w-full h-full">
-          <TocIcon width={32} height={32} />
+        <div class="w-8 h-8">
+          <TocIcon />
         </div>
       </button>
       {isOpen && (

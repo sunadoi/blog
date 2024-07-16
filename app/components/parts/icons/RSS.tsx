@@ -1,6 +1,4 @@
-import type { SVGIcon } from "@/types/SVGIcon"
-
-export const RSSIcon: SVGIcon = ({ width, height }) => {
+export const RSSIcon = () => {
   return (
     <svg
       version="1.1"
@@ -9,8 +7,8 @@ export const RSSIcon: SVGIcon = ({ width, height }) => {
       xmlns:xlink="http://www.w3.org/1999/xlink"
       viewBox="0 0 455.731 455.731"
       xml:space="preserve"
-      width={width}
-      height={height}
+      width="100%"
+      height="100%"
     >
       <title>RSS Icon</title>
       <g>
