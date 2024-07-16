@@ -5,11 +5,19 @@ import { Footer } from "@/components/projects/Footer"
 import { baseURL } from "@/constants/path"
 import { getCanonicalURL } from "@/functions/getCanonicalURL"
 
-export default jsxRenderer(({ children, title, description }) => {
+export default jsxRenderer(async ({ children, title, description }) => {
   const pageTitle = title ? `${title} | SunaBox` : "SunaBox"
   const siteDescription = description ?? "SunaBox is a tech blog"
   const c = useRequestContext()
   const currentUrl = c.req.url
+
+  // /apiへのリクエストをした場合でも_renderer.tsxが呼ばれるため、ここでreturnして無限ループを防ぐ
+  if (new URL(currentUrl).pathname.startsWith("/api")) return <></>
+
+  // 動的OGイメージが必要かどうかでリクエストするかどうか分岐
+  const slug = currentUrl.split("/").at(-1)
+  const res = await fetch(`http://localhost:5173/api/ogimage/${slug}`)
+  console.log({ res: await res.text() })
 
   return (
     <html lang="ja">
