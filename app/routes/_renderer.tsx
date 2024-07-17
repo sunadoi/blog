@@ -30,11 +30,11 @@ export default jsxRenderer(async ({ children, title, description }) => {
         <meta property="og:description" content={siteDescription} />
         <meta property="og:url" content={currentUrl} />
         <meta property="og:type" content="article" />
-        <meta property="og:image" content={`${baseURL}/assets/favicon.ico`} />
+        <meta property="og:image" content={`${baseURL}/favicon.ico`} />
         <meta property="og:locale:alternate" content="ja_JP" />
         <meta name="twitter:card" content="summary" />
         <meta name="twitter:site" content="@suna_tech" />
-        <meta name="twitter:image" content={`${baseURL}/assets/favicon.ico`} />
+        <meta name="twitter:image" content={`${baseURL}/favicon.ico`} />
         {import.meta.env.PROD ? (
           <script src="/static/theme.js" />
         ) : (
@@ -47,9 +47,30 @@ export default jsxRenderer(async ({ children, title, description }) => {
           <link href="/app/styles/index.css" rel="stylesheet" />
         )}
         {import.meta.env.PROD ? (
-          <link rel="icon" href="/assets/favicon.ico" />
+          <>
+            {/* faviconはroot直下に置く方がベター */}
+            <link rel="icon" href="/favicon.ico" />
+            <link
+              rel="apple-touch-icon"
+              sizes="180x180"
+              href="/apple-touch-icon.png"
+            />
+            <link
+              rel="icon"
+              type="image/png"
+              sizes="32x32"
+              href="/favicon-32x32.png"
+            />
+            <link
+              rel="icon"
+              type="image/png"
+              sizes="16x16"
+              href="/favicon-16x16.png"
+            />
+            <link rel="manifest" href="/site.webmanifest" />
+          </>
         ) : (
-          <link rel="icon" href="/app/public/assets/favicon.ico" />
+          <link rel="icon" href="/app/public/favicon.ico" />
         )}
         <link rel="canonical" href={getCanonicalURL(currentUrl)} />
         <link

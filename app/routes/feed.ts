@@ -20,7 +20,7 @@ export const generateRssFeed = async (): Promise<string> => {
     language: "ja",
     copyright: "copyright",
     generator: baseURL,
-    favicon: `${baseURL}/assets/favicon.ico`,
+    favicon: `${baseURL}/favicon.ico`,
     image: `${baseURL}/assets/me.webp`,
     author: {
       name: "suna",

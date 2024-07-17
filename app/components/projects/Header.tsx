@@ -13,7 +13,7 @@ export const Header = () => {
       <header className={base()}>
         <a href="/" class="flex items-center gap-2">
           <img
-            src={getAssetPath("/assets/favicon.ico")}
+            src={getAssetPath("/favicon.ico")}
             alt="logo"
             width="24"
             height="24"
