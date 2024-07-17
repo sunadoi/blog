@@ -13,6 +13,7 @@ type Tag = {
 
 type Frontmatter = {
   title: string
+  ogImageTitle: string[]
   description: string
   icon: ArticleIconKey
   tags: ArticleIconKey[]
@@ -20,7 +21,9 @@ type Frontmatter = {
 }
 
 type MDX = {
-  frontmatter: Omit<Frontmatter, "tags"> & { tags: string }
+  frontmatter: Omit<Frontmatter, "ogImageTitle" | "tags"> & { tags: string } & {
+    ogImageTitle: string
+  }
   default: () => JSX.Element
 }
 
@@ -45,7 +48,11 @@ export const getArticles = (): { articles: Article[]; tagCount: Tag } => {
 
       return {
         slug: match[1],
-        frontmatter: { ...file.frontmatter, tags },
+        frontmatter: {
+          ...file.frontmatter,
+          ogImageTitle: file.frontmatter.ogImageTitle?.split(","),
+          tags,
+        },
         Component: file.default,
       }
     })

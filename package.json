@@ -7,13 +7,15 @@
     "check": "biome check app",
     "check:fix": "biome check --write --unsafe app",
     "preview": "vite build --mode client && vite build && wrangler pages dev",
-    "deploy": "tsc --noEmit && vite build --mode client && vite build && wrangler pages deploy"
+    "deploy": "vite build --mode client && vite build && wrangler pages deploy"
   },
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "clsx": "^2.1.1",
     "feed": "^4.2.2",
     "hono": "^4.4.11",
-    "honox": "^0.1.23"
+    "honox": "^0.1.23",
+    "satori": "^0.10.14"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.8.3",

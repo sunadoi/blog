@@ -79,7 +79,9 @@ export default defineConfig(({ mode }) => {
             generateRobotsTxt: true,
           }),
         ],
-        ssr: { external: ["jsdom", "feed"] },
+        ssr: {
+          external: ["jsdom", "feed", "satori", "@resvg/resvg-js"],
+        },
         resolve: {
           alias: { "@": path.resolve(__dirname, "./app") },
         },
