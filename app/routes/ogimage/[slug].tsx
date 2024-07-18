@@ -94,7 +94,6 @@ const loadGoogleFont = async ({
     },
   })
   const css = await res.text()
-  console.log({ css })
 
   const fontUrl = css.match(
     /src: url\((.+)\) format\('(opentype|truetype)'\)/,

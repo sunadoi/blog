@@ -64,10 +64,7 @@ export const TocButton = () => {
       {isOpen && (
         <>
           {/* biome-ignore lint/a11y/useKeyWithClickEvents: */}
-          <div
-            class="fixed z-20 top-0 bg-transparent w-full h-full"
-            onClick={toggleDialog}
-          />
+          <div class="fixed z-20 top-0 w-full h-full" onClick={toggleDialog} />
         </>
       )}
       <dialog
@@ -75,7 +72,6 @@ export const TocButton = () => {
         class={clsx(
           "text-foreground rounded-lg overflow-y-scroll w-[90%] sm:w-[70%]",
           "fixed z-50 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2",
-          "foxus:outline-none focus:outline-0",
         )}
       >
         <Card type="wide" hasBorder>
