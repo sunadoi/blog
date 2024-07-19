@@ -24,8 +24,11 @@ export default createRoute(
           <Card type={{ initial: "slim", sm: "wide" }}>
             <article className="article flex flex-col gap-8 leading-8 p-4">
               <h1 className="font-semibold">{article.frontmatter.title}</h1>
-              <div class="flex flex-col gap-2 border-b pb-4 lg:hidden">
-                <time>公開日: {article.frontmatter.publishedAt}</time>
+              <div class="flex flex-col gap-4 border-b pb-4 lg:hidden">
+                <div class="flex flex-col gap-1">
+                  <time>公開日: {article.frontmatter.publishedAt}</time>
+                  <time>最終更新日: {article.frontmatter.updatedAt}</time>
+                </div>
                 <div class="flex gap-4">
                   {article.frontmatter.tags.map((tag) => {
                     const Icon = ArticleIconMap.get(tag)
@@ -51,7 +54,10 @@ export default createRoute(
         <div class="col-span-2 hidden lg:flex lg:flex-col lg:gap-4">
           <Card type="wide">
             <div class="flex flex-col gap-4">
-              <time>公開日: {article.frontmatter.publishedAt}</time>
+              <div class="flex flex-col gap-2">
+                <time>公開日: {article.frontmatter.publishedAt}</time>
+                <time>最終更新日: {article.frontmatter.updatedAt}</time>
+              </div>
               <div class="flex gap-2">
                 {article.frontmatter.tags.map((tag) => {
                   const Icon = ArticleIconMap.get(tag)

@@ -18,6 +18,7 @@ type Frontmatter = {
   icon: ArticleIconKey
   tags: ArticleIconKey[]
   publishedAt: string
+  updatedAt: string
 }
 
 type MDX = {
