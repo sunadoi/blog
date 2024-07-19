@@ -1,9 +1,6 @@
 name = "blog"
 pages_build_output_dir = "./dist"
 
-# [vars]
-# MY_VAR = "my-variable"
-
 # [[kv_namespaces]]
 # binding = "MY_KV_NAMESPACE"
 # id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

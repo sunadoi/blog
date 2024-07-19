@@ -2,13 +2,13 @@ import { Header } from "@/components/projects/Header"
 import { jsxRenderer, useRequestContext } from "hono/jsx-renderer"
 import { Script } from "honox/server"
 import { Footer } from "@/components/projects/Footer"
-import { baseURL } from "@/constants/path"
+import { baseURL, siteName } from "@/constants/site"
 import { getCanonicalURL } from "@/functions/getCanonicalURL"
 
 export default jsxRenderer(
   async ({ children, title, description, ogImagePath }) => {
-    const pageTitle = title ? `${title} | SunaBox` : "SunaBox"
-    const siteDescription = description ?? "SunaBox is a tech blog"
+    const pageTitle = title ? `${title} | ${siteName}` : siteName
+    const siteDescription = description ?? `${siteName} is a tech blog`
     const c = useRequestContext()
     const canonicalURL = getCanonicalURL(c.req.url)
 
@@ -21,7 +21,7 @@ export default jsxRenderer(
             content="width=device-width, initial-scale=1.0"
           />
           <meta name="description" content={siteDescription} />
-          <meta property="og:site_name" content="SunaBox" />
+          <meta property="og:site_name" content={siteName} />
           <meta property="og:title" content={pageTitle} />
           <meta property="og:description" content={siteDescription} />
           <meta property="og:url" content={canonicalURL} />
@@ -78,7 +78,7 @@ export default jsxRenderer(
           <link
             rel="alternate"
             type="application/rss+xml"
-            title="SunaBox"
+            title={siteName}
             href={`${baseURL}/feed.xml`}
           />
           <title>{pageTitle}</title>

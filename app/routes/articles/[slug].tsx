@@ -6,7 +6,7 @@ import { ArticleIconMap } from "@/constants/articleIconMap"
 import { BuyMeCoffee } from "@/components/projects/BuyMeCoffee"
 import { Toc, TocButton } from "@/components/projects/_Toc.island"
 import { Card } from "@/components/parts/Card"
-import { baseURL } from "@/constants/path"
+import { baseURL } from "@/constants/site"
 
 export default createRoute(
   ssgParams(() =>

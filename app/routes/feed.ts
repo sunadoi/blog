@@ -1,4 +1,4 @@
-import { baseURL } from "@/constants/path"
+import { baseURL, siteName } from "@/constants/site"
 import { getArticles } from "@/functions/articles"
 import { Feed } from "feed"
 import { createRoute } from "honox/factory"
@@ -13,7 +13,7 @@ export default createRoute(async (c) => {
 
 export const generateRssFeed = async (): Promise<string> => {
   const feed = new Feed({
-    title: "SunaBox",
+    title: siteName,
     description: "技術ブログ",
     id: baseURL,
     link: baseURL,

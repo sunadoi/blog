@@ -1,4 +1,4 @@
-import { baseURL } from "@/constants/path"
+import { baseURL } from "@/constants/site"
 
 export const getCanonicalURL = (url: string) => {
   const path = new URL(url).pathname

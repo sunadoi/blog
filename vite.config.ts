@@ -13,7 +13,7 @@ import { transformerCopyButton } from "@rehype-pretty/transformers"
 import rehypeAutolinkHeadings from "rehype-autolink-headings"
 import rehypeSlug from "rehype-slug"
 import Sitemap from "vite-plugin-sitemap"
-import { baseURL } from "./app/constants/path"
+import { baseURL } from "./app/constants/site"
 
 export default defineConfig(({ mode }) => {
   return mode === "client"
