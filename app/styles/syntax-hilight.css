@@ -53,6 +53,10 @@ figure[data-rehype-pretty-code-figure]:has(> [data-rehype-pretty-code-title])
   @apply !rounded-tl-none;
 }
 
+figure > pre {
+  @apply dark:border;
+}
+
 /* inline code */
 p > code {
   @apply bg-slate-3;
