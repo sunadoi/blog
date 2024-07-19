@@ -1,4 +1,4 @@
-import { JSDOM } from "jsdom"
+import { JSDOM, VirtualConsole } from "jsdom"
 
 type Ogp = {
   title: string
@@ -10,8 +10,17 @@ type Ogp = {
 }
 
 export const fetchOgp = async (url: string) => {
+  const virtualConsole = new VirtualConsole()
+  virtualConsole.on("jsdomError", (e: Error) => {
+    // jsdomが内部依存しているcssomがcssの@ルールをサポートできていなくて以下のエラーが出る
+    // ここでは関係ないので、該当のエラーの場合は握りつぶす
+    // https://github.com/NV/CSSOM/issues/109
+    if (e.message === "Could not parse CSS stylesheet") return
+    console.error(e)
+  })
+
   try {
-    const dom = await JSDOM.fromURL(url)
+    const dom = await JSDOM.fromURL(url, { virtualConsole })
     const host = new URL(url).host
     const favicon = `https://www.google.com/s2/favicons?domain=${host}&sz=20`
     const metas = dom.window.document.getElementsByTagName("meta")
