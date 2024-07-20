@@ -9,7 +9,6 @@ import remarkMdxFrontmatter from "remark-mdx-frontmatter"
 import remarkGfm from "remark-gfm"
 import remarkBreaks from "remark-breaks"
 import rehypePrettyCode from "rehype-pretty-code"
-import { transformerCopyButton } from "@rehype-pretty/transformers"
 import rehypeAutolinkHeadings from "rehype-autolink-headings"
 import rehypeSlug from "rehype-slug"
 import Sitemap from "vite-plugin-sitemap"
@@ -58,18 +57,7 @@ export default defineConfig(({ mode }) => {
               remarkGfm,
             ],
             rehypePlugins: [
-              [
-                rehypePrettyCode,
-                {
-                  theme: "monokai",
-                  transformers: [
-                    transformerCopyButton({
-                      visibility: "always",
-                      feedbackDuration: 1000,
-                    }),
-                  ],
-                },
-              ],
+              [rehypePrettyCode, { theme: "monokai" }],
               rehypeSlug,
               [rehypeAutolinkHeadings, { behavior: "wrap" }],
             ],
