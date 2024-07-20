@@ -5,6 +5,7 @@ import { FileIconMap } from "@/constants/fileIconMap"
 import { Anchor } from "./Anchor"
 import { EmbedLink } from "./EmbedLink"
 import { Img } from "./Image"
+import { Message } from "./Message"
 
 export function useMDXComponents() {
   return {
@@ -46,6 +47,7 @@ export function useMDXComponents() {
     ),
     EmbedLink: EmbedLink,
     Img: Img,
+    Message: Message,
     figcaption: (props: JSX.IntrinsicElements["figcaption"]) => {
       const Icon = FileIconMap.get(props["data-language"])
 
