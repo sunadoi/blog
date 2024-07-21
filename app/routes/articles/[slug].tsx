@@ -20,7 +20,7 @@ export default createRoute(
     if (!article) return c.redirect("/404")
 
     return c.render(
-      <div class="grid grid-cols-8 gap-4 sm:my-10">
+      <div class="grid grid-cols-8 gap-4 mb-8 sm:my-10">
         <div className="col-span-8 flex flex-col gap-8 lg:col-span-6">
           <Card type={{ initial: "slim", sm: "wide" }}>
             <article className="article flex flex-col gap-8 leading-8 p-4">
@@ -49,7 +49,7 @@ export default createRoute(
             </article>
           </Card>
           <Card type={{ initial: "slim", sm: "wide" }}>
-            <div class="flex justify-center items-center gap-8">
+            <div class="flex justify-center items-center py-4 gap-8 sm:gap-20">
               <LikeButton slug={slug} />
               <BuyMeCoffee />
             </div>

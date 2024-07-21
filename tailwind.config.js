@@ -30,6 +30,7 @@ module.exports = withTV({
         muted: "var(--muted)",
         accent: "var(--accent)",
         card: "var(--card)",
+        popover: "var(--popover)",
       },
       borderRadius: {
         lg: "var(--radius)",
