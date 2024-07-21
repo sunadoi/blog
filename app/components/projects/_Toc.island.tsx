@@ -4,8 +4,15 @@ import tocbot from "tocbot"
 import { Card } from "../parts/Card"
 import { TocIcon } from "../parts/icons/Toc"
 
+const largerThanLg = "(min-width: 1024px)"
+
 export const Toc = () => {
   useEffect(() => {
+    // TocとTocButtonの2か所でtocbot.initするとスクロール時のis-active-linkの付け替えが片方でしか効かなくなる
+    // そのため画面幅に応じてinitの実行を制御する。呼び出す側はSSGでレンダリングし分けができないのでコンポーネント内でそれぞれ判定する
+    if (!import.meta.env.DEV && import.meta.env.MODE !== "client") return
+    if (!window.matchMedia(largerThanLg).matches) return
+
     tocbot.init({
       tocSelector: ".toc",
       contentSelector: ".article",
@@ -28,6 +35,11 @@ export const TocButton = () => {
   const [isOpen, setIsOpen] = useState(false)
 
   useEffect(() => {
+    // TocとTocButtonの2か所でtocbot.initするとスクロール時のis-active-linkの付け替えが片方でしか効かなくなる
+    // そのため画面幅に応じてinitの実行を制御する。呼び出す側はSSGでレンダリングし分けができないのでコンポーネント内でそれぞれ判定する
+    if (!import.meta.env.DEV && import.meta.env.MODE !== "client") return
+    if (window.matchMedia(largerThanLg).matches) return
+
     tocbot.init({
       tocSelector: ".toc-dialog",
       contentSelector: ".article",
