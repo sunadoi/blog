@@ -2,6 +2,7 @@ import path from "node:path"
 import ssg from "@hono/vite-ssg"
 import honox from "honox/vite"
 import client from "honox/vite/client"
+import adapter from "@hono/vite-dev-server/cloudflare"
 import { defineConfig } from "vite"
 import mdx from "@mdx-js/rollup"
 import remarkFrontmatter from "remark-frontmatter"
@@ -45,7 +46,10 @@ export default defineConfig(({ mode }) => {
         build: { emptyOutDir: false },
         publicDir: "./app/public",
         plugins: [
-          honox({ client: { input: ["./app/styles/index.css"] } }),
+          honox({
+            client: { input: ["./app/styles/index.css"] },
+            devServer: { adapter },
+          }),
           ssg({ entry: "./app/server.ts" }),
           mdx({
             jsxImportSource: "hono/jsx",

@@ -6,7 +6,7 @@
     "build": "vite build --mode client && vite build",
     "check": "biome check app",
     "check:fix": "biome check --write --unsafe app",
-    "preview": "vite build --mode client && vite build && wrangler pages dev",
+    "preview": "vite build --mode client && vite build && wrangler pages dev --kv=LIKES",
     "deploy": "tsc --noEmit && vite build --mode client && vite build && wrangler pages deploy"
   },
   "dependencies": {

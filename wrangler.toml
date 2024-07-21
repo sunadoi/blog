@@ -1,9 +1,13 @@
 name = "blog"
 pages_build_output_dir = "./dist"
+compatibility_date = "2024-07-03"
 
-# [[kv_namespaces]]
-# binding = "MY_KV_NAMESPACE"
-# id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# このファイルの中身を変更してdeployしても反映されていない…？
+# kvのbindingsをdashboardから設定しようとしても、production環境は以下のポップアップが出てきて変更できない
+# This setting is managed in wrangler.toml. Update wrangler.toml to make changes.
+[[kv_namespaces]]
+binding = "LIKES"
+id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 # [[r2_buckets]]
 # binding = "MY_BUCKET"

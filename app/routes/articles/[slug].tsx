@@ -7,6 +7,7 @@ import { BuyMeCoffee } from "@/components/projects/BuyMeCoffee"
 import { Toc, TocButton } from "@/components/projects/_Toc.island"
 import { Card } from "@/components/parts/Card"
 import { baseURL } from "@/constants/site"
+import { LikeButton } from "@/components/projects/_LikeButton.island"
 
 export default createRoute(
   ssgParams(() =>
@@ -48,7 +49,10 @@ export default createRoute(
             </article>
           </Card>
           <Card type={{ initial: "slim", sm: "wide" }}>
-            <BuyMeCoffee />
+            <div class="flex justify-center items-center gap-8">
+              <LikeButton slug={slug} />
+              <BuyMeCoffee />
+            </div>
           </Card>
         </div>
         <div class="col-span-2 hidden lg:flex lg:flex-col lg:gap-4">
