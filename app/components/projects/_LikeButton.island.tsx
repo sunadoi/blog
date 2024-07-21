@@ -4,11 +4,11 @@ export const LikeButton = ({ slug }: { slug: string }) => {
   const [likes, setLikes] = useState(0)
   const [isLiked, setIsLiked] = useState(false)
 
-  const url = import.meta.env.DEV ? "http://localhost:5173" : "https://suna.dev"
+  const url = "https://blog-api.sunadoi.workers.dev"
 
   useEffect(() => {
     ;(async () => {
-      const res = await fetch(`${url}/api/likes/${slug}`)
+      const res = await fetch(`${url}/likes/${slug}`)
       const { likes } = (await res.json()) as { likes: number }
       setLikes(likes)
     })()
@@ -16,7 +16,7 @@ export const LikeButton = ({ slug }: { slug: string }) => {
 
   const incrementLikes = async () => {
     if (isLiked) return
-    await fetch(`${url}/api/likes/${slug}`, { method: "PUT" })
+    await fetch(`${url}/likes/${slug}`, { method: "PUT" })
     setLikes((prev) => prev + 1)
     setIsLiked(true)
   }
