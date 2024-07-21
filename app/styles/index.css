@@ -51,4 +51,8 @@
   h4 {
     font-size: clamp(1rem, 0.963rem + 0.19vw, 1.125rem);
   }
+
+  @view-transition {
+    navigation: auto;
+  }
 }
