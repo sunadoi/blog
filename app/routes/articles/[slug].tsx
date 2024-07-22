@@ -8,6 +8,7 @@ import { Toc, TocButton } from "@/components/projects/_Toc.island"
 import { Card } from "@/components/parts/Card"
 import { baseURL } from "@/constants/site"
 import { LikeButton } from "@/components/projects/_LikeButton.island"
+import { SNSButton } from "@/components/projects/SNSButton"
 
 export default createRoute(
   ssgParams(() =>
@@ -49,11 +50,21 @@ export default createRoute(
             </article>
           </Card>
           <Card type={{ initial: "slim", sm: "wide" }}>
-            <div class="flex justify-center items-center py-4 gap-8 sm:gap-20">
+            <div class="flex justify-center items-center py-4 gap-10 sm:gap-8 md:gap-20">
               <LikeButton slug={slug} />
-              <BuyMeCoffee />
+              <SNSButton slug={slug} />
+              <div class="hidden sm:block">
+                <BuyMeCoffee />
+              </div>
             </div>
           </Card>
+          <div class="block sm:hidden">
+            <Card type={{ initial: "slim", sm: "wide" }}>
+              <div class="flex justify-center items-center py-4">
+                <BuyMeCoffee />
+              </div>
+            </Card>
+          </div>
         </div>
         <div class="col-span-2 hidden lg:flex lg:flex-col lg:gap-4">
           <Card type="wide">
