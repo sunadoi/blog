@@ -1,8 +1,8 @@
+import { siteName } from "@/constants/site"
+import { getAssetPath } from "@/functions/assetPath"
 import { tv } from "tailwind-variants"
 import { ThemeButton } from "../parts/_Theme.island"
 import { Menu } from "./_Menu.island"
-import { getAssetPath } from "@/functions/assetPath"
-import { siteName } from "@/constants/site"
 
 export const Header = () => {
   const { base, title, links, menuIcon } = header({

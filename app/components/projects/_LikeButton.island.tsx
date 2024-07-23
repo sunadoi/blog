@@ -1,6 +1,6 @@
+import { useDebounce } from "@/hooks/useDebounce"
 import clsx from "clsx"
 import { useEffect, useState } from "hono/jsx"
-import { useDebounce } from "@/hooks/useDebounce"
 
 export const LikeButton = ({ slug }: { slug: string }) => {
   const [likes, setLikes] = useState(0)

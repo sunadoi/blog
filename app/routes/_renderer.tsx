@@ -1,9 +1,9 @@
-import { Header } from "@/components/projects/Header"
-import { jsxRenderer, useRequestContext } from "hono/jsx-renderer"
-import { Script } from "honox/server"
 import { Footer } from "@/components/projects/Footer"
+import { Header } from "@/components/projects/Header"
 import { baseURL, siteName } from "@/constants/site"
 import { getCanonicalURL } from "@/functions/getCanonicalURL"
+import { jsxRenderer, useRequestContext } from "hono/jsx-renderer"
+import { Script } from "honox/server"
 
 export default jsxRenderer(
   async ({ children, title, description, ogImagePath }) => {

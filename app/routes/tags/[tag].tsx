@@ -1,7 +1,7 @@
+import { ArticleCard } from "@/components/projects/ArticleCard"
 import { ssgParams } from "hono/ssg"
 import { createRoute } from "honox/factory"
 import { getArticles, getArticlesByTag } from "../../functions/articles"
-import { ArticleCard } from "@/components/projects/ArticleCard"
 
 export default createRoute(
   ssgParams(() =>

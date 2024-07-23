@@ -1,7 +1,7 @@
-import { createRoute } from "honox/factory"
-import { getArticles } from "../functions/articles"
 import { ArticleCard } from "@/components/projects/ArticleCard"
 import type { JSX } from "hono/jsx/jsx-runtime"
+import { createRoute } from "honox/factory"
+import { getArticles } from "../functions/articles"
 
 export default createRoute((c) => {
   const { articles } = getArticles()

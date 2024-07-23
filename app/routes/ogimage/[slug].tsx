@@ -1,9 +1,9 @@
+import { readFileSync } from "node:fs"
+import { Resvg } from "@resvg/resvg-js"
 import { ssgParams } from "hono/ssg"
 import { createRoute } from "honox/factory"
-import { getArticle, getArticles } from "../../functions/articles"
 import satori from "satori"
-import { Resvg } from "@resvg/resvg-js"
-import { readFileSync } from "node:fs"
+import { getArticle, getArticles } from "../../functions/articles"
 
 export default createRoute(
   ssgParams(() =>
@@ -56,6 +56,7 @@ export default createRoute(
             </div>
           </div>
         </div>
+        // biome-ignore lint/suspicious/noExplicitAny: Reactはinstallしていないのでanyにする
       ) as any,
       {
         width: 1200,

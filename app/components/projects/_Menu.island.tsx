@@ -1,9 +1,9 @@
 import clsx from "clsx"
 import { useState } from "hono/jsx"
-import { LinkIcon } from "../parts/icons/Link"
 import { Card } from "../parts/Card"
-import { HomeIcon } from "../parts/icons/Home"
 import { AccountIcon } from "../parts/icons/Account"
+import { HomeIcon } from "../parts/icons/Home"
+import { LinkIcon } from "../parts/icons/Link"
 import { TagsIcon } from "../parts/icons/Tags"
 
 export const Menu = () => {

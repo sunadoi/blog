@@ -1,5 +1,5 @@
-import { fetchOgp } from "./fetchOGP"
 import { Anchor } from "./Anchor"
+import { fetchOgp } from "./fetchOGP"
 
 export const EmbedLink = async ({ url }: { url: string }) => {
   const ogp = await fetchOgp(url)

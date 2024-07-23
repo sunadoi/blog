@@ -1,5 +1,5 @@
-import type { JSX } from "hono/jsx/jsx-runtime"
 import type { ArticleIconKey } from "@/constants/articleIconMap"
+import type { JSX } from "hono/jsx/jsx-runtime"
 
 type Article = {
   slug: string
