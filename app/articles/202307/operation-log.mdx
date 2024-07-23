@@ -1,0 +1,215 @@
+---
+title: AsyncLocalStorageとprismaのmiddlewareを使ってDBの操作ログを記録する
+ogImageTitle: AsyncLocalStorageと,prismaのmiddlewareを使って,DBの操作ログを記録する
+description: AsyncLocalStorageとprismaのmiddlewareを使ってDBの操作ログを記録する機能を実装しました。テーブルが追加されても手を加えなくていいようにメンテしやすい形で実装できました。
+tags: NestJS,Node.js,prisma
+icon: Node.js
+publishedAt: 2023/07/17
+updatedAt: 2023/07/17
+---
+
+エラーが起きた際など、デバッグするための手がかりとしてDBに入ってる特定のレコードがいつどのように変更されたかという情報が欲しいケースってそれなりにあるのではないでしょうか。
+
+たとえば管理画面上での操作によって誰がいつデータを書き換えたかがわかると、エラーが発生するようになった時点とレコードを変更した時点を照らし合わせてそこが怪しそう…などなど
+
+今回は特定のAPIサーバーからDBへのWrite処理を行なった際に、以下の変更内容を記録できるように実装したので、それをまとめておきます。
+
+・誰が
+・いつ
+・どのテーブルのどのレコードを
+・どのように
+変更したか
+
+今回は管理画面上でのwrite系の操作ログを溜めたかったので、サーバー側で使用しているNestJSとprismaの機能を使っています。
+また、「誰が」という情報を記録するためにAsyncLocalStorageを使用しています。
+
+<Message>
+Node.js: 18.12.1
+@nestjs/core: 9.4.3
+prisma: 4.15.0
+</Message>
+
+## prismaのmiddlewareを使ってwrite処理の際にログを記録する
+
+prismaにはmiddlewareという機能があるため、今回はこれを使ってあらゆるwrite処理の際にログに記録できるようにしました
+こうしておけば機能追加でwrite処理が増えたとしてもその度にログ追加のことを気にする必要がなくなるからです
+
+あわせて読みたい
+
+<EmbedLink url="https://www.prisma.io/docs/concepts/components/prisma-client/middleware" />
+
+<Message type="warn">
+余談ですが、prismaの4.16からmiddlewareは非推奨となったようです
+代わりにclient extensionsを使用するようにドキュメントに記載されるようになりました
+実装当時はprismaのversionが4.15だったことと、NestJSのようなClassベースでの実装でclient extensionsを使って同様のことをするには骨が折れそうだったので今回はmiddlewareを使用する方法として記述します
+</Message>
+
+先に全貌を書くと以下のようになりました。
+説明に必要な場所だけ抜粋して記述しています。
+
+```ts
+export class PrismaService extends PrismaClient<Prisma.PrismaClientOptions, Prisma.LogLevel> implements OnModuleInit {
+  constructor() {
+    this.$use(async (params, next) => {
+      if (
+        isLocalOrTest() ||
+        !params.model ||
+        params.model === "operation_log" ||
+        !["create", "update", "upsert", "delete", "createMany", "updateMany", "deleteMany"].includes(params.action)
+      ) {
+        return await next(params)
+      }
+
+      // 詳細は後述。操作している人のemailを取得
+      const currentUserEmail = als.getStore()?.email
+
+      // bigIntがJSONに変換できないので、numberに変換する
+      const toJSON = (json: any) => {
+        return JSON.parse(JSON.stringify(json, (_: string, value: any) => (typeof value === "bigint" ? Number(value) : value)))
+      }
+
+      // create, update, upsert, deleteの処理は省略
+
+      if (["createMany", "updateMany", "deleteMany"].includes(params.action)) {
+        const before = params.args.where ? await (this[params.model] as any).findMany({ where: params.args.where }) : undefined
+        await next(params)
+        // transaction内ではfindManyで更新後のafterを取得できない
+        const after =
+          !params.args.where || params.action === "deleteMany" || params.runInTransaction
+            ? undefined
+            : await (this[params.model] as any).findMany({ where: params.args.where })
+
+        try {
+          await this.operation_log.create({
+            data: {
+              table_name: params.model,
+              action: params.action as "createMany" | "updateMany" | "deleteMany",
+              where: params.args.where,
+              data: params.args.data,
+              before: before ? toJSON(before) : undefined,
+              after: after ? toJSON(after) : undefined,
+              modified_by: currentUserEmail ?? "",
+            },
+          })
+        } catch (err: any) {
+          this.logger.error(
+            `failed to create operation_log, before=${JSON.stringify(before)}, params=${JSON.stringify(params)}, error=${
+              err?.message
+            }`
+          )
+        }
+
+        return after
+      }
+
+      this.logger.error(`unexpected action, action=${params.action}`)
+      return await next(params)
+    })
+  }
+}
+```
+
+まず最初に必要な場合以外はその後の処理を行わないように抜けています。
+具体的にはローカル環境の場合、write処理じゃない場合、`operation_log`が対象の場合などです。
+今回は、ログを`operation_log`テーブルに溜める想定なので、最後の条件は入れておかないと無限ループになるためです。
+
+操作者の情報が欲しいのでcurrentUserEmailなるものを取得していますが、これについては後述します。
+
+それ以降の操作は`params`の中に色々な情報が格納されているため、これを使いながら必要な情報をログに残すようにしています
+
+`operation_log`テーブルのbefore, afterのカラムにそれぞれのjsonを入れるようにしており、
+この時変更するカラム内容にbigintがあるとjsonのparseが失敗するため、あらかじめnumber型に変換しています
+
+afterの情報は`where`句を使ってgetするようにしていますが、トランザクション中の処理でこのmiddlewareが走った場合はまだレコードが書き換えられていないためafterの情報が取れません
+`params.args.data`に書き換えようとしているデータは入っているため、両方残すことで書き換え後のデータがわかるようにしています
+
+これによってwrite処理の時にどのテーブルのどのレコードがどのように変更されたかがbefore, afterで記録されるようになりました
+
+## AsyncLocalStorageを使って誰が操作したかを記録する
+
+ここまででも十分と言えば十分なのですが、できれば誰が操作したかという情報も残しておきたいところです。
+
+各DB操作の処理ごとに引数で渡すなどの方法は将来的に追加されたものに対して対応できないので、できればprismaのmiddlewareの中で操作者の情報を受け取れるように責務を閉じ込めたい。
+
+Node.jsのAsyncLocalStorageを使えばちょうどそんなようなことができそうでした。
+
+<EmbedLink url="https://docs.nestjs.com/recipes/async-local-storage" />
+
+> The main idea of Async Local Storage is that we can _wrap_ some function call with the `AsyncLocalStorage#run` call. All code that is invoked within the wrapped call gets access to the same `store`, which will be unique to each call chain.
+>
+> In the context of NestJS, that means if we can find a place within the request’s lifecycle where we can wrap the rest of the request’s code, we will be able to access and modify state visible only to that request, which may serve as an alternative to REQUEST-scoped providers and some of their limitations.
+>
+> *https://docs.nestjs.com/recipes/async-local-storage*
+
+要約すると`AsyncLocalStorage#run`で関数をラップすれば、ラップされた関数の中では同じstoreにアクセスできる。
+つまり、リクエスト時にこれから行われる処理をラップすることができれば、リクエストごとに隔離されたstoreを作成することができるということです。
+
+今回の目的に照らしてみるとリクエスト時にNestJSのmiddlewareの中で操作者のemailをstoreに格納し、`AsyncLocalStorage#run`で残りの処理をラップすれば、prismaのmiddlewareの中でこのstoreにアクセスすることで操作者のemailを取得できそうです。
+
+まずは`CurrentUserMiddleware`なるものを作成します。
+
+```ts title="currentUser.middleware.ts"
+import { AsyncLocalStorage } from "async_hooks"
+
+import { Injectable, NestMiddleware } from "@nestjs/common"
+
+type CurrentUser = {
+  email: string
+}
+
+export const als = new AsyncLocalStorage<CurrentUser>()
+
+@Injectable()
+export class CurrentUserMiddleware implements NestMiddleware {
+  async use(req: Request, _: Response, next: () => void) {
+    // emailの取得処理
+    const email = ...
+
+    als.run({ email }, next)
+  }
+}
+```
+
+続いて、`AppModule`でこのmiddlewareを適用させます
+(一部のエンドポイントには適用されないようにexcludeしています)
+
+```ts title="app.module.ts"
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(CurrentUserMiddleware)
+      .exclude(...IGNORE_ENDPOINTS)
+      .forRoutes("*")
+  }
+}
+```
+
+あとはprismaのmiddlewareの中で以下のように操作者のemailを取得して、`operation_log`テーブルの`modified_by`カラムに格納しています。
+
+```ts
+const currentUserEmail = als.getStore()?.email
+
+await this.operation_log.create({
+  ...
+  modified_by: currentUserEmail
+}
+```
+
+これで無事誰が操作したかという情報も格納されるようになりました。
+
+## まとめ
+
+prismaのmiddleware機能を使ってどのテーブルのどのレコードがどのように変更されたかを記録するようにしました。
+AsyncLocalStorageをNestJSのmiddlewareで使うことで、リクエストごとに操作者をprismaのmiddlewareの中で取得できるようになります。
+
+これらを組み合わせることで、将来的に機能を追加する際にも追加実装が必要なくwrite処理のログを残すことができるようになりました。
+
+AsyncLocalStorage、Next.js関連で使われてて初めて知ったんですが今回実際に使ってみることでこういう使い方ができるのかと勉強になりました。
+
+prismaのmiddleware昨日は非推奨になってしまったので、どこかでclient extensionsを使った形にリプレイスしようと思います。
+
+## 参考
+
+<EmbedLink url="https://www.prisma.io/docs/concepts/components/prisma-client/middleware" />
+
+<EmbedLink url="https://docs.nestjs.com/recipes/async-local-storage" />

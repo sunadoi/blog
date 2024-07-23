@@ -21,8 +21,8 @@ export const Message = ({
 
 const message = tv({
   slots: {
-    bg: "flex items-center gap-4 rounded-lg p-2",
-    icon: "w-6 h-6",
+    bg: "flex items-center gap-4 rounded-lg px-4 py-2",
+    icon: "w-6 h-6 flex-shrink-0",
   },
   variants: {
     type: {
