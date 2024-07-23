@@ -2,9 +2,9 @@ import clsx from "clsx"
 import { useState } from "hono/jsx"
 import { Card } from "../parts/Card"
 import { AccountIcon } from "../parts/icons/Account"
-import { HomeIcon } from "../parts/icons/Home"
 import { LinkIcon } from "../parts/icons/Link"
 import { TagsIcon } from "../parts/icons/Tags"
+import { ArticleIcon } from "../parts/icons/Article"
 
 export const Menu = () => {
   const [isOpen, setIsOpen] = useState(false)
@@ -54,9 +54,9 @@ export const Menu = () => {
             <li>
               <a href="/" class="flex items-center gap-2 px-4 py-2">
                 <div class="w-6">
-                  <HomeIcon />
+                  <ArticleIcon />
                 </div>
-                <p>Home</p>
+                <p>Articles</p>
               </a>
             </li>
             <li>

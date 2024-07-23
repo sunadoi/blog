@@ -12,9 +12,6 @@ export default jsxRenderer(
     const c = useRequestContext()
     const canonicalURL = getCanonicalURL(c.req.url)
 
-    const pathname = new URL(c.req.url).pathname
-    if (pathname.startsWith("/api")) return <></>
-
     return (
       <html lang="ja">
         <head>

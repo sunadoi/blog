@@ -1,5 +1,4 @@
 import { siteName } from "@/constants/site"
-import { getAssetPath } from "@/functions/assetPath"
 import { tv } from "tailwind-variants"
 import { ThemeButton } from "../parts/_Theme.island"
 import { Menu } from "./_Menu.island"
@@ -16,16 +15,15 @@ export const Header = () => {
           href="/"
           class="flex items-center gap-2 hover:opacity-80 duration-150"
         >
-          <img
-            src={getAssetPath("/favicon.ico")}
-            alt="logo"
-            width="24"
-            height="24"
-          />
           <h1 className={title()}>{siteName}</h1>
         </a>
         <div class="flex items-center gap-8">
           <ul className={links()}>
+            <li class="hover:opacity-80 duration-150">
+              <a href="/">
+                <h2>Articles</h2>
+              </a>
+            </li>
             <li class="hover:opacity-80 duration-150">
               <a href="/about">
                 <h2>About</h2>
