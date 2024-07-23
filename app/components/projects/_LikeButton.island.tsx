@@ -1,8 +1,11 @@
 import clsx from "clsx"
 import { useEffect, useState } from "hono/jsx"
+import { useDebounce } from "@/hooks/useDebounce"
 
 export const LikeButton = ({ slug }: { slug: string }) => {
   const [likes, setLikes] = useState(0)
+  const [count, setCount] = useState(0)
+  const value = useDebounce(count, 1000)
   const [isLiked, setIsLiked] = useState(false)
 
   const endpoint = `https://blog-api.sunadoi.workers.dev/likes/${slug}`
@@ -16,18 +19,24 @@ export const LikeButton = ({ slug }: { slug: string }) => {
     })()
   }, [])
 
+  useEffect(() => {
+    if (value === 0) return
+    if (import.meta.env.DEV) return
+    ;(async () => {
+      await fetch(endpoint, {
+        method: "PUT",
+        body: JSON.stringify({ count: value }),
+      })
+    })()
+  }, [value])
+
   const incrementLikes = async () => {
+    setCount((prev) => prev + 1)
     setLikes((prev) => prev + 1)
     setIsLiked(true)
     setTimeout(() => {
       setIsLiked(false)
     }, 200)
-
-    if (import.meta.env.DEV) return
-    await fetch(endpoint, {
-      method: "PUT",
-      body: JSON.stringify({ count: 1 }),
-    })
   }
 
   return (
