@@ -65,4 +65,5 @@ p > code {
   @apply rounded-md;
   @apply bg-slate-4;
   @apply dark:bg-slate-7;
+  @apply text-sm;
 }

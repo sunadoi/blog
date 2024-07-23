@@ -1,0 +1,330 @@
+---
+title: sqlパッケージ周りのコードリーディング
+ogImageTitle: sqlパッケージ周りのコードリーディング
+description: Goのsqlパッケージのコードリーディングした内容をまとめます
+tags: Go,MySQL
+icon: Go
+publishedAt: 2023/06/25
+updatedAt: 2023/06/25
+---
+
+業務でGoのデバッグをするためにsqlパッケージ周りのコードを読む必要があって、いい勉強になったのでメモがてらまとめておきます
+
+MySQLを使っているのですが、このimportをよく見かけます
+
+```go
+import _ "github.com/go-sql-driver/mysql"
+```
+
+mysqlドライバのコードを直接参照しないからこうしてるのですが、直接参照しないのにどうやってmysqlのメソッドを実行しているのだろうというのが疑問に思いました
+
+多分interface使って呼び出してるんだろうなくらいのぼんやりした理解度でした
+これはその通りだったのですが、ちゃんと理解できたら色々繋がって面白かったのでまとめます
+
+今回はMySQLドライバを使っているので
+
+-   MySQLドライバによる初期化処理
+-   実際にクエリ実行する時の処理
+
+という順で見ていこうと思います
+適宜コードを貼って見ていきますが、説明上不要な部分は省略します
+
+今回見たパッケージのバージョンは以下の通り
+
+<Message>
+go@1.20.2
+go-sql-driver/mysql@1.7.1
+</Message>
+
+## MySQLドライバによる初期化処理
+
+まずDBへの接続処理を行います
+
+```go title="client.go"
+import (
+    ...
+    "database/sql"
+    _ "github.com/go-sql-driver/mysql"
+)
+
+func main() {
+    dbconf := "user:pass@tcp(127.0.0.1:3306)/database?...."
+    db, err := sql.Open("mysql", dbconf)
+    ...
+}
+```
+
+さて、疑問だった `_`でのimportが早速出てきました
+
+これをもう少し深ぼって見ていきます
+実際に中を覗いてみると、init関数があることがわかります
+
+```go title="go-sql-driver/mysql/driver.go"
+func init() {
+    sql.Register("mysql", &MySQLDriver{})
+}
+```
+
+これはsqlパッケージの`Register`メソッドを呼び出しています
+
+```go title="database/sql/driver/driver.go"
+type Driver interface {
+  	Open(name string) (Conn, error)
+}
+
+func Register(name string, driver driver.Driver) {
+    ...
+    drivers[name] = driver
+}
+```
+
+これが何をしているかというと`driver`を`drivers["mysql"]`に設定しています  
+`driver`というのは`Open`メソッドをもつinterfaceで、先ほどの`MySQLDriver`は`Open`メソッドが実装されているのでこのinterfaceを満たします
+
+mysqlドライバを`_`でimportした時点ではこの処理が走るのみです
+
+さて、次にこの状態で `db, err := sql.Open("mysql", dbconf)`が行われると何が起こるかを見ていきます
+
+```go title="database/sql/sql.go"
+func Open(driverName, dataSourceName string) (*DB, error) {
+	driveri, ok := drivers[driverName]
+
+	if driverCtx, ok := driveri.(driver.DriverContext); ok {
+		connector, err := driverCtx.OpenConnector(dataSourceName)
+		if err != nil {
+			return nil, err
+		}
+		return OpenDB(connector), nil
+	}
+}
+```
+
+先ほど登録したdriverがまず取り出されています。これが先ほど格納した`MySQLDriver`の構造体です
+
+それが`DriverContext`interfaceを満たすかどうかをチェックしています  
+`MySQLDriver`は`driver.Driver`interfaceも満たしていますが、同時にこの`DriverContext`interfaceも満たしています  
+つまり`OpenConnector`メソッドを持っているのでこれを実行すると`connector`が取得できます (`connector`がどういうものかは後述します)  
+それを引数に`OpenDB`メソッドを呼び出しています
+
+`OpenDB`の中を見ていきます
+
+```go title="database/sql/sql.go"
+func OpenDB(c driver.Connector) *DB {
+	ctx, cancel := context.WithCancel(context.Background())
+	db := &DB{
+		connector:    c,
+    ...
+	}
+
+	go db.connectionOpener(ctx)
+
+	return db
+}
+```
+
+先ほど取得した`connector`がsqlパッケージの`DB`の`connector`フィールドに格納されます  
+そして`connectionOpener`メソッドで接続処理をしています
+
+さてここで`db`がreturnされていて、これが呼び出し元に返ってきます
+
+```go title="client.go"
+db, err := sql.Open("mysql", dbconf)
+```
+
+つまり、`db`の中には`driver.Connector`interfaceを満たす`connector`が格納されていて、これが後々mysqlのメソッドを実行する上で重要な役割を果たします。  
+`connector`がどういうものかはこの後じっくり追っていくのでここでは説明しません。  
+とりあえずこれから使用する`db`の中には`connector`が格納されていて、それは`MySQLDriver`の`OpenConnector`メソッドによって返されたものであることさえ理解できてればここではokです
+
+## 実際にクエリ実行する時の処理
+
+ここでは例として`QueryContext`で処理を追っていきます
+
+以降では先ほどの`db`を使ってクエリの実行をした時の流れを見ていくわけですが、先に結論を書くと先ほど格納した`connector`が持つ`Connect`メソッドを呼び出すと`mysqlConn`というmysqlのconnectionの構造体が得られるようになっており、これが`QueryContext`のinterfaceを満たしているのでそれを呼び出すとmysqlの`QueryContext`が実行されるというカラクリです
+
+では詳細を見ていきます
+
+```go
+query := `SELECT ...`
+
+db.QueryContext(ctx, query)
+```
+
+(実際は独自のstructでラップされていると思うのでこんな風に`db`から直接呼び出すことはあまりない気もしますが。)
+
+```go title="database/sql/sql.go"
+func (db *DB) QueryContext(ctx context.Context, query string, args ...any) (*Rows, error) {
+	var rows *Rows
+	var err error
+
+	err = db.retry(func(strategy connReuseStrategy) error {
+		rows, err = db.query(ctx, query, args, strategy)
+		return err
+	})
+
+	return rows, err
+}
+```
+
+`QueryContext`の中では`retry`メソッドを呼び出しつつその中で実際に処理する内容である`query`メソッドを呼び出しています
+
+`query`メソッドの中を見ていきます
+
+```go title="database/sql/sql.go"
+func (db *DB) query(ctx context.Context, query string, args []any, strategy connReuseStrategy) (*Rows, error) {
+	dc, err := db.conn(ctx, strategy)
+	if err != nil {
+		return nil, err
+	}
+
+	return db.queryDC(ctx, nil, dc, dc.releaseConn, query, args)
+}
+
+func (db *DB) conn(ctx context.Context, strategy connReuseStrategy) (*driverConn, error) {
+	...
+	ci, err := db.connector.Connect(ctx)
+	dc := &driverConn{
+		db:         db,
+		ci:         ci,
+		...
+	}
+	...
+	return dc, nil
+}
+```
+
+まず`conn`メソッドを呼び出していてその中では`db.connector.Connect`というメソッドを呼び出しています
+
+さて、再び`connector`が登場しました  
+`query`メソッドの中身を見ていく前に、まずは`connector`が何者なのかを紐解いていきます  
+これは以下のような`Connector`というinterfaceを満たすものです
+
+```go title="database/sql/driver/driver.go"
+type Connector interface {
+	Connect(context.Context) (Conn, error)
+	Driver() Driver
+}
+
+type Conn interface {
+	Prepare(query string) (Stmt, error)
+	Close() error
+	Begin() (Tx, error)
+}
+```
+
+`Conn`というinterfaceを返す`Connect`メソッドを持つことがわかります
+
+この`connector`というのは初期化時にmysqlドライバによって取得されたものでした  
+ではmysqlドライバが`connector`を取得した実装を見ていきます
+
+```go title="go-sql-driver/mysql/driver.go"
+func (d MySQLDriver) OpenConnector(dsn string) (driver.Connector, error) {
+	cfg, err := ParseDSN(dsn)
+	if err != nil {
+		return nil, err
+	}
+	return &connector{
+		cfg: cfg,
+	}, nil
+}
+```
+
+`connector`という構造体を返しています  
+これが`Connector`interfaceを満たしているわけですから、この`connector`は`Connect`メソッドを実装しているはずです  
+実際にそれを見てみましょう
+
+```go title="go-sql-driver/mysql/connector.go"
+func (c *connector) Connect(ctx context.Context) (driver.Conn, error) {
+	...
+	mc := &mysqlConn{
+		maxAllowedPacket: maxPacketSize,
+		maxWriteSize:     maxPacketSize - 1,
+		closech:          make(chan struct{}),
+		cfg:              c.cfg,
+	}
+	...
+	return mc, nil
+}
+```
+
+`Conn`interfaceを満たす`mysqlConn`という構造体を返していますね
+
+ここまでわかれば十分なので元のquery実行部分に戻ります  
+再掲すると以下のようになっています
+
+```go title="database/sql/sql.go" {12}
+func (db *DB) query(ctx context.Context, query string, args []any, strategy connReuseStrategy) (*Rows, error) {
+	dc, err := db.conn(ctx, strategy)
+	if err != nil {
+		return nil, err
+	}
+
+	return db.queryDC(ctx, nil, dc, dc.releaseConn, query, args)
+}
+
+func (db *DB) conn(ctx context.Context, strategy connReuseStrategy) (*driverConn, error) {
+	...
+	ci, err := db.connector.Connect(ctx)
+	dc := &driverConn{
+		db:         db,
+		ci:         ci,
+		...
+	}
+	...
+	return dc, nil
+}
+```
+
+`db.connector.Connect(ctx)`で返された`ci`は先ほど見た`mysqlConn`です  
+`connector`はinterfaceなのでsqlパッケージでは単に`Connect`メソッドを呼び出すだけで、mysqlに依存せず`mysqlConn`が取得できているのがわかります
+
+`conn`メソッドは`mysqlConn`を`driverConn`の`ci`というフィールドに格納して`dc`を返しています  
+なるほど、ここでコネクションプールの管理をしているわけですね
+
+`query`メソッドは`queryDC`メソッドを呼び出していて引数にこの`dc`を渡しています
+
+```go title="database/sql/sql.go"
+func (db *DB) queryDC(ctx, txctx context.Context, dc *driverConn, releaseConn func(error), query string, args []any) (*Rows, error) {
+	queryerCtx, ok := dc.ci.(driver.QueryerContext)
+	if ok {
+		...
+		rowsi, err = ctxDriverQuery(ctx, queryerCtx, queryer, query, nvdargs)
+	}
+}
+```
+
+先ほどの`ci`が`QueryerContext`を満たしているかどうかをチェックして、満たしている場合は`ctxDriverQuery`メソッドを呼び出しています  
+引数に渡している`queryerCtx`はinterfaceを満たす、つまり`QueryContext`メソッドを持つことが保証されており、繰り返しですがその実体は`mysqlConn`です
+
+では`ctxDriverQuery`を見ていきます
+
+```go title="database/sql/ctxutil.go"
+func ctxDriverQuery(ctx context.Context, queryerCtx driver.QueryerContext, queryer driver.Queryer, query string, nvdargs []driver.NamedValue) (driver.Rows, error) {
+	if queryerCtx != nil {
+		return queryerCtx.QueryContext(ctx, query, nvdargs)
+	}
+	...
+}
+```
+
+`QueryContext`を呼び出しています  
+この`queryerCtx`は実体は`mysqlConn`ですから、実際の処理はmysqlパッケージの`QueryContext`が実行されるわけです
+
+こうしてsqlパッケージはmysqlドライバに依存せずにinterface越しにmysqlのメソッドを呼び出すことができるようになっています
+
+## まとめ
+
+mysqlドライバのコードを直接参照していなくても実行できる仕組みをまとめると、以下のようになっていました
+
+-   importした時のinitでsqlのdriverに`OpenConnector`メソッドを持つmysqlの構造体を格納
+-   sqlの初期接続時にdriverの`OpenConnector`メソッドを実行し、`sql.DB`の`connector`に`Connect`メソッドを持つmysql用の構造体を格納しておく
+-   クエリ実行時に`connector`の`Connect`メソッドを実行し、mysqlのコネクションを取得
+-   このmysqlコネクションが`QueryContext`メソッドを実装している
+
+読んでないけどおそらくpostgresqlとかのドライバも同じ仕組みになっているのだろうと思われます
+
+全体を振り返るとsqlパッケージでは様々なものがinterfaceで定義されていて`OpenConnector`や`Connect`はinterface越しに実行されています
+
+これによってsqlパッケージはどのRDBのドライバを使うかに依存しないようになっています
+設計が美しいですね
+
+いい勉強になりました！！！
