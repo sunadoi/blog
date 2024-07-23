@@ -1,0 +1,198 @@
+---
+title: Goのテスト並列性とflakyテストの原因解明
+ogImageTitle: Goのテスト並列性と,flakyテストの原因解明
+description: GoのテストがlocalおよびCIでflakyになる原因について調査しました
+tags: Go
+icon: Go
+publishedAt: 2023/09/06
+updatedAt: 2024/04/28
+---
+
+
+Goでここ最近ずっとテスト周りのリファクタリングをしていたんですが、その際にテストの並列性について調べました。
+
+localおよびCIでflakyになるテストがちょいちょい発生していて一部原因不明だったのですが、並列性について知識を整理し直すことでなぜflakyになっていたかが特定できました。
+一番謎だったCIではテストが通るけどlocalでは通らないという問題が解明できたので備忘録として記載しておきます。
+
+<Message>
+Go: 1.21
+</Message>
+
+## Goのテストの並列性
+
+Goのテストの並列性について言及する際は、package内のテストの並列性とpackage間のテストの並列性を区別する必要があります。
+
+### package内のテストの並列性
+
+**package内のテストはデフォルトでは逐次的に実行されます。**
+
+では並列実行させるためにはどうすればよいのかと言うと、testing packageの `t.Parallel()`を使います。
+Goのテストで並列実行と言えば思い浮かぶ `t.Parallel()`メソッドですが、これはpackage内のテストを並列実行するためのメソッドです。
+
+#### package内テストの並列数は-parallelオプションを使う
+
+並列実行と言っても同時に実行する数の最大値は決まっています。
+それを設定するためのフラグが-parallelで、以下がその説明です(一部抜粋)
+
+> -parallel n
+Allow parallel execution of test functions that call t.Parallel.
+The value of this flag is the maximum number of tests to run
+simultaneously.
+By default, -parallel is set to the value of GOMAXPROCS.
+Note that -parallel only applies within a single test binary.
+The ‘go test’ command may run tests for different packages
+in parallel as well, according to the setting of the -p flag
+(see ‘go help build’).
+
+> t.Parallelを呼び出すテスト関数の並列実行。
+このフラグの値は、同時に実行するテストの最大数です。
+デフォルトでは、-parallel は GOMAXPROCS の値に設定されています。
+parallelは単一のテスト・バイナリ内でのみ適用されることに注意。
+‘go test’ コマンドは、-p フラグの設定に従って、異なるパッケージのテストを並行して実行することができる。（’go help build’ を参照）。
+*DeepL訳*
+
+最後の文に書いてあるように、このparallelで設定した値は、あくまで1つのテストプロセス内での並列性の最大数です。
+
+`t.Parallel()`メソッドを使うことで、関数単位あるいはサブテスト単位で並列処理を行うことができます。
+
+### package間のテストの並列性
+
+package内のテストはデフォルトでは逐次的実行でしたが、**package間はデフォルトで並列実行されます。**
+
+#### package間テストの並列数は-pオプションを使う
+
+package間の並列実行の最大数は`-p`オプションで設定します。
+`-p`は-parallelのエイリアスかと思いきや、しっかりと役割が分かれています。
+以下がその説明です。
+
+> -p n
+the number of programs, such as build commands or
+test binaries, that can be run in parallel.
+The default is GOMAXPROCS, normally the number of CPUs available.
+
+> ビルド・コマンドやテスト・バイナリなど、並行して実行できるプログラムの数。
+並列に実行できるプログラムの数。
+デフォルトはGOMAXPROCSで、通常は利用可能なCPUの数である。
+*DeepL訳*
+
+デフォルト値は`-parallel`オプションと同じで`GOMAXPROCS`です。
+
+ここまでをまとめます
+
+**package内**
+・デフォルトは逐次処理
+・`t.Parallel()`によって並列処理可能
+・並列数の最大値は`-parallel`オプションで設定可能で、デフォルトは`GOMAXPROCS`
+
+**package間**
+・デフォルトで並列処理
+・並列数の最大値は`-p`オプションで設定可能で、デフォルトは`GOMAXPROCS`
+
+`GOMAXPROCS`の値がどこでどう設定されているかはこの後の話と関連するので後述します。
+
+調査結果としては以上ですが、ここからは実際のプロジェクトでflakyなテストが生じてしまっていた原因とそれに対する対策を記載しておこうと思います。
+
+## flakyテストが生じる背景
+
+そもそもテストの並列性について調査しようと思ったのは、実際のプロジェクトでテストがflakyに落ちていた原因を特定するためでした。
+
+まず、テスト方針について記載しておくと、
+DBに接続が必要なメソッドのテストのほとんどは、実際にDBコンテナを立ててそこに接続するようなテストになっていました。
+
+テストがflakyに落ちるという状況は、同じDBを使用しているため並列処理によってデータの書き込みが同じタイミングで競合しているからだろうという推測ができます。
+
+最終的に並列度を調整することで解決できたので、この推測は当たっていました。
+
+しかし、その時点で不可解だったのはlocalとCIでの挙動の違いです。
+CIとlocalで同じコマンドでテストを走らせた場合、CIは通ってたまにflakyに落ちるくらいだったのですが、localではほぼ100%落ちます。
+しかも複数箇所でエラーになって落ちるのですが、その箇所が実行のたびに変わります。
+
+localではflakyというより安定的に落ちていました…w
+
+以下では並列度をもう少し深ぼることで、localとCIでこのような挙動の違いが生じた理由を探っていきます。
+
+## GOMAXPROCSのデフォルト値と並列度
+
+CIとlocalで挙動が違った原因の結論を先に書くと、`GOMAXPROCS`の設定値の違いです。
+
+`-parallel`や`-p`で並列度を設定できることは説明しましたが、そのデフォルト値は`GOMAXPROCS`です。
+
+ではこの`GOMAXPROCS`はどのような値なのでしょうか。
+
+> The GOMAXPROCS variable limits the number of operating system threads that can execute user-level Go code simultaneously. There is no limit to the number of threads that can be blocked in system calls on behalf of Go code; those do not count against the GOMAXPROCS limit. This package’s GOMAXPROCS function queries and changes the limit.
+*https://pkg.go.dev/runtime*
+
+> GOMAXPROCS変数は、ユーザーレベルのGoコードを同時に実行できるオペレーティング・システムのスレッド数を制限します。Go コードに代わってシステム・コールでブロックされるスレッド数には制限はありません。本パッケージの GOMAXPROCS 関数は、この制限を照会して変更します。
+*DeepL訳*
+
+並行処理を行う際のOSのスレッド数制限に関わっているようです。
+
+そしてそれを設定するための`GOMAXPROCS`関数の説明にデフォルト値は`runtime.NumCPU`であると記載があります。
+
+> It defaults to the value of runtime.NumCPU.
+*https://pkg.go.dev/runtime#GOMAXPROCS*
+
+
+この`runtime.NumCPU`の説明には以下のようにあります。
+どうやらそのプロセスにおける論理CPUの値らしいです。
+
+> NumCPU returns the number of logical CPUs usable by the current process.
+*https://pkg.go.dev/runtime#NumCPU*
+
+ここまでの情報をまとめると並列度を設定するオプションはあるものの、そのデフォルト値は`GOMAXPROCS`の値に等しく、そのデフォルト値はそのプロセスにおける論理CPUの値と等しいということが分かりました。
+
+この情報を元にもう一度localとCIでの挙動の違いを考えてみます。
+
+CI上で使用しているイメージはubuntu-22.04で、これは2vCPUでした。
+一方でlocalで使用しているMacはと言うと、10vCPUでした。
+
+つまり同じテストコマンドを実行するにしても、CI上で実行するのとlocalで実行するのではlocalで実行したほうが圧倒的に並列度が高いという事がわかります。
+
+同じDBを使用してテストを走らせているため、並列度が高くなればなるほど同じタイミングでデータ競合しやすくなりますね。
+
+これがCIではflakyレベルで落ちてたけど、localではほぼ確実に落ちるカラクリです。
+
+手元のマシンの方がいいスペックだったから落ちてたというなんとも皮肉な結果でした。
+
+## 対応策
+
+テストの並列実行による同タイミングでのデータ競合が原因とわかりました。
+DBに接続するテストは`t.Parallel`を使用せず、テスト実行コマンドに-p=1を設定してpackage間のテストを並列に走らせないようにすることで、localとCIともに安定的にテストがpassする平和な世界にすることができました。
+
+package間で並列にできるものを逐次実行にしているので、当然これはパフォーマンスを犠牲にしています。
+
+パフォーマンスをちゃんと考えるのであれば、以下のような方針が考えられます。
+
+1. DB接続するテストだけCI上のstepを分けて-p=1を設定し、他のテストはpackage間並列実行にする
+2. DBをpackageごとに用意してデータ競合しないようにする
+https://tech.mfkessai.co.jp/2019/11/parallel-go-test/
+
+1はそれなりにすぐできそうですが、2は中々大変そうです…
+
+いずれにせよ現時点では特にテスト実行時間で困っている段階ではないので雑に-p=1を設定しています。
+
+この辺はパフォーマンス気になりだしたら対応しようと思ってます。
+
+## まとめ
+
+Goのテストの並列実行はpackage内とpackage間を区別して考える必要がある。
+
+**package内**
+・デフォルトは逐次処理
+・`t.Parallel()`によって並列処理可能
+・並列数の最大値は-parallelオプションで設定可能で、デフォルトは`GOMAXPROCS`
+
+**package間**
+・デフォルトで並列処理
+・並列数の最大値は-pオプションで設定可能で、デフォルトは`GOMAXPROCS`
+
+`GOMAXPROCS`はデフォルトでは論理CPUの値と同じ。
+
+長らく謎だった原因が解明するとスッキリしますね。
+テストの並列実行に対する解像度も上がって満足です。
+
+## 参考
+
+<EmbedLink url="https://engineering.mercari.com/blog/entry/how_to_use_t_parallel" />
+
+<EmbedLink url="https://tech.mfkessai.co.jp/2019/11/parallel-go-test" />
