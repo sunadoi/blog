@@ -15,7 +15,7 @@ export const BuyMeCoffee = () => {
         href="https://www.buymeacoffee.com/ysuna"
         target="_blank"
         rel="noopener noreferrer"
-        className="rounded-xl shadow-lg"
+        className="rounded-xl shadow-lg hover:scale-105 duration-150"
       >
         <img
           src={getAssetPath("/assets/coffee_button.webp")}

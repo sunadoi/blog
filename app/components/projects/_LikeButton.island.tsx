@@ -34,12 +34,19 @@ export const LikeButton = ({ slug }: { slug: string }) => {
     <button type="button" onClick={incrementLikes}>
       <div
         class={clsx(
-          "flex flex-col items-center justify-center gap-2 rounded-full border p-4 duration-500",
+          "flex flex-col items-center justify-center gap-2 rounded-full border p-4",
           "w-24 h-24 sm:w-32 sm:h-32",
-          isLiked && "scale-125",
+          "hover:scale-105 duration-150",
         )}
       >
-        <span class="text-4xl">👍</span>
+        <span
+          class={clsx(
+            "text-4xl origin-bottom-left duration-200",
+            isLiked && "-rotate-12",
+          )}
+        >
+          👍
+        </span>
         <span>{likes}</span>
       </div>
     </button>

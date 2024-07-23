@@ -12,7 +12,10 @@ export const Header = () => {
   return (
     <>
       <header className={base()}>
-        <a href="/" class="flex items-center gap-2">
+        <a
+          href="/"
+          class="flex items-center gap-2 hover:opacity-80 duration-150"
+        >
           <img
             src={getAssetPath("/favicon.ico")}
             alt="logo"
@@ -23,12 +26,12 @@ export const Header = () => {
         </a>
         <div class="flex items-center gap-8">
           <ul className={links()}>
-            <li>
+            <li class="hover:opacity-80 duration-150">
               <a href="/about">
                 <h2>About</h2>
               </a>
             </li>
-            <li>
+            <li class="hover:opacity-80 duration-150">
               <a href="/tags">
                 <h2>Tags</h2>
               </a>

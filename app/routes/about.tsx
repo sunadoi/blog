@@ -29,7 +29,7 @@ export default createRoute(async (c) => {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <div class="w-6">
+                <div class="w-6 hover:scale-110 duration-150">
                   <XIcon />
                 </div>
               </a>
@@ -38,7 +38,7 @@ export default createRoute(async (c) => {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <div class="w-6">
+                <div class="w-6 hover:scale-110 duration-150">
                   <GitHubIcon />
                 </div>
               </a>
@@ -47,7 +47,7 @@ export default createRoute(async (c) => {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <div class="w-6">
+                <div class="w-6 hover:scale-110 duration-150">
                   <SizumeIcon />
                 </div>
               </a>
@@ -79,7 +79,7 @@ export default createRoute(async (c) => {
             <div class="flex items-center gap-4 border-b pb-2">
               <h1>Site</h1>
               <a href="/feed.xml">
-                <div class="w-6">
+                <div class="w-6 hover:scale-110 duration-150">
                   <RSSIcon />
                 </div>
               </a>

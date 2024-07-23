@@ -9,7 +9,7 @@ export const SNSButton = ({ slug }: { slug: string }) => {
         target="_blank"
         rel="noopener noreferrer"
       >
-        <div class="flex flex-col items-center gap-2 w-8">
+        <div class="flex flex-col items-center gap-2 w-8 hover:scale-110 duration-150">
           <XIcon />
           <span>Post</span>
         </div>
