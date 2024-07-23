@@ -25,7 +25,9 @@ export default createRoute(
         <div className="col-span-8 flex flex-col gap-8 lg:col-span-6">
           <Card type={{ initial: "slim", sm: "wide" }}>
             <article className="article flex flex-col gap-8 leading-8 p-4">
-              <h1 className="font-semibold">{article.frontmatter.title}</h1>
+              <h1 className="font-semibold leading-normal">
+                {article.frontmatter.title}
+              </h1>
               <div class="flex flex-col gap-4 border-b pb-4 lg:hidden">
                 <div class="flex flex-col gap-1">
                   <time>公開日: {article.frontmatter.publishedAt}</time>
