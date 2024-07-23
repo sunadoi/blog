@@ -33,7 +33,7 @@ export default createRoute(
                   <time>公開日: {article.frontmatter.publishedAt}</time>
                   <time>最終更新日: {article.frontmatter.updatedAt}</time>
                 </div>
-                <div class="flex gap-4">
+                <div class="flex gap-4 flex-wrap">
                   {article.frontmatter.tags.map((tag) => {
                     const Icon = ArticleIconMap.get(tag)
                     return (
@@ -75,7 +75,7 @@ export default createRoute(
                 <time>公開日: {article.frontmatter.publishedAt}</time>
                 <time>最終更新日: {article.frontmatter.updatedAt}</time>
               </div>
-              <div class="flex gap-2">
+              <div class="flex gap-2 flex-wrap">
                 {article.frontmatter.tags.map((tag) => {
                   const Icon = ArticleIconMap.get(tag)
                   return (

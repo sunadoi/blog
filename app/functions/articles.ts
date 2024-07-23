@@ -39,9 +39,9 @@ export const getArticles = (): { articles: Article[]; tagCount: Tag } => {
       const match = path.match(/([^/]+)\.mdx$/)
       if (!match) throw new Error(`Invalid path, ${path}`)
 
-      const tags: ArticleIconKey[] = file.frontmatter.tags.split(
-        ",",
-      ) as ArticleIconKey[]
+      const tags: ArticleIconKey[] = file.frontmatter.tags
+        .replace(" ", "")
+        .split(",") as ArticleIconKey[]
 
       for (const tag of tags) {
         tagCount[tag] = (tagCount[tag] || 0) + 1

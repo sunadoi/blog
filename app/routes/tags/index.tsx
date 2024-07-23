@@ -20,7 +20,7 @@ export default createRoute(async (c) => {
                 <Card type="wide">
                   <div className="grid grid-rows-4 place-items-center gap-2 h-full">
                     <div class="flex items-center row-span-2">
-                      <div class="w-16">
+                      <div class="w-16 h-16">
                         {Icon &&
                           (typeof Icon === "string" ? (
                             <span class="grid place-items-center text-2xl sm:text-4xl">
