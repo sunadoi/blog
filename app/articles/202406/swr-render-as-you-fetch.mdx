@@ -1,0 +1,231 @@
+---
+title: useSWRでRender-as-you-fetchパターンを実現する
+ogImageTitle: useSWRでRender-as-you-fetchパターンを実現する
+description: useSWRを使ってRender-as-you-fetchパターンを実現するための書き方について記載する
+tags: React
+icon: React
+publishedAt: 2024/06/24
+updatedAt: 2024/06/24
+---
+
+先日、Reactのv19のRCでSuspenseの挙動が変更になることに対して一部批判の声が上がりました。
+
+<EmbedLink url="https://tkdodo.eu/blog/react-19-and-suspense-a-drama-in-3-acts" />
+
+一つのSuspenseで囲んだ兄弟要素でそれぞれPromiseをthrowした時にv18では並列で処理されてたものが直列になったという内容です。
+詳しくはこの辺の記事を参照。
+
+<EmbedLink url="https://zenn.dev/ossamoon/articles/db883b3e22ff62" />
+
+Reactチームはこの問題に対して対応する方針を示しているようです。
+このような変更が加えられた経緯などは先ほどの記事に書かれているのでここでは詳細は割愛しますが、Reactチームとしてはバグではなく意図通りだったものの、多くのユーザーにとってはそれなりに大きめの変更で戸惑っているという構図になっていそうです。
+そもそもReactチームとしては、Suspense登場の当初から**Render-as-you-fetch**パターンでデータ取得を行うことを推奨していて、その前提であれば今回の変更は受け入れられるだろうと思っていたが、実情はそうはなっていなかったというギャップがあったのではないかと思います。
+
+ところで、データフェッチをサーバー側で行うSSRやRSCといった手法も普及してきましたが、useSWRなどのライブラリを使ってクライアント側で行うケースも現状まだまだ多いと思います。
+実はこういったライブラリを使った時にどうRender-as-you-fetchパターンを実現するかをあまりちゃんと知らなかったんですが、調べたらちゃんと方法が用意されていました。
+
+発端の議論がどう着地するかは一旦置いておいて、本記事ではuseSWRを使ってRender-as-you-fetchパターンを実現する方法と、v18とv19のRCでの挙動の差分を見ていきます。
+(この問題は修正予定とのことなので将来的には挙動が異なる可能性があります。あくまで2024年6月現時点での挙動の違いになります。)
+
+また、useSWRをsuspenseモードで使用していればそれだけでRender-as-you-fetchパターンになるという解釈がそれなりに見られるのですが、これは誤解だと思っておりその辺についても記述します。
+
+その上で、2024年6月時点での自分なりのデータ取得パターンの考えを記載しておこうと思います。
+
+なお、SuspenseはReact.lazyなどで遅延読込する際にも用いられますが、ここではuseSWRを使ったデータフェッチに焦点を置きます。
+
+<Message type="info">
+react: 18.3.0, 19.0.0-rc-3563387fe3-20240621
+react-dom: 18.3.0, 19.0.0-rc-3563387fe3-20240621
+swr: 2.2.5
+</Message>
+
+## v18とv19でのSuspenseの挙動の違い
+
+useSWRでのRender-as-you-fetchパターンを見ていく前に、今回の発端となった議論の挙動の再現を行います。
+その後、その挙動がRender-as-you-fecthパターンを使うとどう改善するのかを見ていきます。
+
+### v18ではfetchが並列処理される
+
+今回、データ取得のエンドポイントは`pokeapi`を使います。
+データを表示する`DataComponent`に`id`を渡して、コンポーネント内部でそのidのポケモンの名前を取得します。
+
+一つの`Suspense`内で2つの別のidの`DataComponent`をレンダリングしています。
+
+```tsx title="App.tsx"
+import { Suspense } from "react";
+import { DataComponent } from "./DataComponent";
+
+const random1 = Math.floor(Math.random() * 1000 + 1);
+const random2 = random1 + 1
+
+export default function App() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <DataComponent id={random1} />
+      <DataComponent id={random2} />
+    </Suspense>
+  );
+}
+```
+
+```tsx title="DataComponent.tsx"
+import useSWR from "swr";
+
+const fetcher = async (id: number) => {
+  const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+  return response.json();
+};
+
+export const DataComponent = ({ id }: { id: number }) => {
+  const { data } = useSWR(id.toString(), fetcher, { suspense: true });
+
+  return (
+    <div>
+      <p>
+        {data.id} {data.name}
+      </p>
+    </div>
+  );
+};
+```
+
+その結果、下記のようにデータ取得が並列に行われていることがわかります。
+
+![devtoolでのv18での並列fetchのスクリーンショット](/assets/article/swr-render-as-you-fetch/v18-parallel.webp)
+
+### v19ではfetchが直列処理される
+
+先ほどと全く同じコードをreactのv19で動かすと以下のようにwaterfallになります。
+これがパフォーマンスの悪化につながるとして今回問題視されている挙動です。
+
+![devtoolでのv19での直列fetchのスクリーンショット](/assets/article/swr-render-as-you-fetch/v19-sequential.webp)
+
+## Fetch-on-renderとRender-as-you-fetchの違い
+
+先ほどのコードでのデータ取得はいわゆるFetch-on-renderパターンによるものであり、コンポーネントがレンダリングされて初めてデータ取得が行われます。
+それに対してRender-as-you-fetchパターンではコンポーネントのレンダリングより前にデータ取得が開始されます。
+
+つまり、両者の最も大きな違いは「**データ取得の開始がコンポーネントの初回レンダリングの前か後か**」になります。
+
+`Suspense`を使ってデータ取得を行えばそれだけでRender-as-you-fecthパターンになるという解釈がそれなりに見受けられますが、データ取得をコンポーネント内部で行なっている以上、初回レンダリングの前にデータ取得が行われることはないのでFetch-on-renderと言えるでしょう。
+
+Fetch-on-renderパターンの代表例として、従来のloading用のstateとuseEffectを使った方法があります。
+こちらと比較すると、useSWRなどのライブラリでsuspenseモードでデータ取得を行うやり方の方が遥かに宣言的ですが、それでもデータ取得パターン自体は変わりません。
+Fetch-on-renderの最適化といったところでしょうか。
+
+## useSWRでRender-as-you-fetchパターンを実現する
+
+では、useSWRでRender-as-you-fetchパターンを実現するためにはどうしたらいいのでしょうか。
+実現するためのポイントは、コンポーネントのレンダリング前にデータ取得を開始することです。
+
+`preload`を使うとそれが可能になります。
+以下のように、`DataComponent`を呼び出す側で`preload`を使ってデータ取得を開始します。
+`preload`はReactコンポーネント外で呼び出せます。
+
+```tsx title="App.tsx"
+import { Suspense } from "react";
+import { DataComponent, fetcher } from "./DataComponent";
+import { preload } from "swr";
+
+const random1 = Math.floor(Math.random() * 1000 + 1);
+const random2 = random1 + 1;
+
+preload(random1.toString(), fetcher);
+preload(random2.toString(), fetcher);
+
+export default function App() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <DataComponent id={random1} />
+      <DataComponent id={random2} />
+    </Suspense>
+  );
+}
+```
+
+これをv19のRCで実行すると以下のようになります。
+並列でデータ取得が開始され、同じデータがキャッシュから使われています。
+`preload`はこのようにデータ取得したものをcacheに格納し、実際のコンポーネントではそのキャッシュを使うという仕組みのようです。
+
+![devtoolでのv19でのpreload使用時の並列fetchのスクリーンショット](/assets/article/swr-render-as-you-fetch/v19-preload.webp)
+
+ちなみに`preload`を使わずに親コンポーネントで同じuseSWRを呼び出しても同じことができます。
+その場合、こちらは`suspense: false`にしておく必要があります。
+
+```tsx title="App.tsx"
+import { Suspense } from "react";
+import { DataComponent, fetcher } from "./DataComponent";
+import useSWR from "swr";
+
+const random1 = Math.floor(Math.random() * 1000 + 1);
+const random2 = Math.floor(Math.random() * 1000 + 1);
+
+export default function App() {
+  useSWR(random1.toString(), fetcher, { suspense: false });
+  useSWR(random2.toString(), fetcher, { suspense: false });
+
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <DataComponent id={random1} />
+      <DataComponent id={random2} />
+    </Suspense>
+  );
+}
+```
+
+useSWRの呼び出しはdedupeされるので、呼び出しが1回ずつになっていることが分かります。
+
+![devtoolでのv19でのdedupe使用時の並列fetchのスクリーンショット](/assets/article/swr-render-as-you-fetch/v19-dedupe.webp)
+
+(公式が推奨しているやり方ではない気がしますが、一応検証したので載せておきました)
+
+## ネストしたコンポーネントでの比較
+
+これまで確認したのは比較的単純な例でしたが、たとえば`Suspense`内部でデータ取得を行うコンポーネントがネストされている場合などを考えると、Render-as-you-fetchパターンのメリットがより際立ちます。
+
+データ取得を行うコンポーネントがネストしている場合は、親コンポーネントのレンダリングが終わって初めて子コンポーネントがレンダリングされます。
+v18までの挙動だったとしても、レンダリングが行われて初めてデータ取得を開始するFetch-on-renderパターンではこの場合どうしてもデータ取得のwaterfallは避けられません。
+
+Render-as-you-fetchパターンでは親コンポーネントと子コンポーネントのレンダリングを開始する前にデータ取得を開始することで、データ取得を並列化することができます。
+(ただし、これは子コンポーネントのデータ取得が親コンポーネントのデータ取得に依存していないことや、呼び出す側であらかじめ必要なデータが分かっている場合に限ります)
+
+## 常にRender-as-you-fetchパターンを使うべきか？
+
+ここまで見てきたように、Render-as-you-fetchパターンはv18でもv19でもパフォーマンス観点からは最適化されます。
+
+一方で、データを取得するコンポーネントとそれを表示するコンポーネントが分かれるので、子コンポーネントが必要としているデータフェッチ処理の内容が親コンポーネントに漏れてしまいます。
+
+したがって、コンポーネントの責務分離の観点からはFetch-on-renderの方がきれいだなと思っています。
+
+個人的には「責務分離 > パフォーマンス」というのが基本ポリシーなので、よっぽどパフォーマンス的に妥協できない、工夫できないという場合を除けば今まで通りデータ取得処理はコンポーネント内で完結させておきたい派です。
+
+議論の的になった一つの`Suspense`内で複数のデータフェッチを行うコンポーネントを兄弟コンポーネントとしている構成も、順次コンポーネントを表示させて良いのであれば`Suspense`自体を分ければよいのではと思っています。
+
+ネストしているコンポーネントなどでFetch-on-renderだとwaterfallが避けられないといった場合は考えると思いますが、その場合もコンポーネントの構成を見直せないかなどを最初に考えると思います。
+
+これはあくまで2024年6月時点での仕様の理解の上で、責務分離とパフォーマンス観点を考慮しての個人的見解です。
+他に考慮すべき視点が漏れている可能性はあるので、もしあれば教えてほしいです。
+
+## 余談
+
+新しくなったReactのドキュメントからはRender-as-you-fetchやFetch-on-renderという用語そのものがなくなっていました。
+しかし、Suspense発表当時のドキュメントには存在していたのと議論の発端となったブログでも使用されていたので、この記事ではそのまま使用しています。
+
+Reactチームとしてはこの分類はもうしていないのでしょうか…？
+ちょっとだけ気になってます。
+
+それから今回はuseSWRについて見ていきましたが、パッと見たところtanstack queryにも同様のことを実現するためのprefetchなる機能が用意されていそうです。
+
+## まとめ
+
+- v18とv19のRCではSuspense内のデータ取得の挙動が異なる
+- Render-as-you-fetchパターンを使えばv19のRCでもv18と同様の挙動にできる
+- useSWRを単にsuspenseモードで使っている場合はFetch-on-renderパターンになる
+- useSWRでRender-as-you-fetchパターンでデータ取得を行う場合はpreloadを使う
+
+## 参考
+
+<EmbedLink url="https://17.reactjs.org/docs/concurrent-mode-suspense.html#approach-3-render-as-you-fetch-using-suspense" />
+<EmbedLink url="https://swr.vercel.app/docs/prefetching" />
+<EmbedLink url="https://tkdodo.eu/blog/react-19-and-suspense-a-drama-in-3-acts" />
+<EmbedLink url="https://zenn.dev/ossamoon/articles/db883b3e22ff62" />

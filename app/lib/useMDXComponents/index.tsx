@@ -47,6 +47,7 @@ export function useMDXComponents() {
     ),
     EmbedLink: EmbedLink,
     Img: Img,
+    img: Img,
     Message: Message,
     figcaption: (props: JSX.IntrinsicElements["figcaption"]) => {
       const Icon = FileIconMap.get(props["data-language"])
