@@ -18,6 +18,7 @@
     "satori": "^0.10.14"
   },
   "devDependencies": {
+    "@actions/github": "^6.0.0",
     "@biomejs/biome": "^1.8.3",
     "@cloudflare/workers-types": "^4.20240529.0",
     "@hono/vite-cloudflare-pages": "^0.4.1",
