@@ -1,0 +1,142 @@
+---
+title: form内の複数のsubmitボタンを区別する方法とFormEventの型定義
+ogImageTitle: form内の,複数のsubmitボタンを区別する方法と,FormEventの型定義
+description: form内に複数のsubmitボタンがある場合、どのボタンが押されたかを区別する方法について。追加で検証したFormEventの型定義についても記載
+tags: TypeScript,JavaScript,React
+icon: TypeScript
+publishedAt: 2023/05/13
+updatedAt: 2023/05/13
+---
+
+form内にsubmitボタンが複数あって、どっちのsubmitボタンが押されたかを区別したい時ってありませんか？
+
+たとえば「保存して詳細画面に戻る」と「保存して次の入力に進む」みたいなケース
+こういうケースで1つのformの中に複数のsubmitボタンがあるときにどちらのsubmitボタンが押されたのかを判別する方法をまとめておきます。
+
+調査する過程でReactの型定義周りの挙動についても勉強になったので、こちらもあわせて記載します。
+どちらかと言うとこちらが本記事の主旨です。
+
+## submitterで判別する
+
+早速結論を書くと以下のようにすればどちらのsubmitボタンが押されたのかを判別できます。
+
+```tsx
+<form onSubmit={e => {
+  const submitButton = e.nativeEvent.submitter?.name
+  if (submitButton === "backToDetail") {
+    location.href = "foo"
+    return
+  }
+  if (submitButton === "goToNext") {
+    location.href = "bar"
+    return 
+  }
+}}>
+  <button name="backToDetail">保存して詳細画面に戻る</button>
+  <button name="goToNext">保存して次の入力へ進む</button>
+</form>
+```
+
+今回はReactを使っている前提で書いているので、nativeEventを使っています
+nativeEventについては[こちら](https://react.dev/reference/react-dom/components/common#react-event-object-properties)を参照
+
+ただし、当然submitButtonはリテラル型ではないので型安全ではないので注意です。
+
+それぞれのbuttonの`onClick`で処理を書き分ければ済む話では？という感じなのですが、submit時にHTMLのformのバリデーションを適用させたいのでこの形にしています。
+
+## 型定義を追う
+
+実は型定義については先ほどの部分以外にも型安全じゃない箇所があります。
+それがsubmitterとnameの部分です。実際この両者は補完で出てきません。
+
+以下ではこうなってる理由を追っていきます。
+
+まずformのonSubmitのcallbackで受け取る引数のeventの型は`FormEvent<HTMLFormElement>`となっています。
+`FormEvent`の型を見ると以下のように`SyntheticEvent`をextendsしていて、それは`BaseSyntheticEvent`をextendsしています。
+
+```ts
+interface FormEvent<T = Element> extends SyntheticEvent<T> {}
+
+interface SyntheticEvent<T = Element, E = Event> extends BaseSyntheticEvent<E, EventTarget & T, EventTarget> {}
+
+interface BaseSyntheticEvent<E = object, C = any, T = any> {
+  nativeEvent: E;
+  ...
+}
+```
+
+`SyntheticEvent`の型パラメータの2番目は何も与えられていないので、`BaseSyntheticEvent`の1番目はただの`Event`が与えられます。
+これによってnativeEventの型がEventになっています。
+
+今回使用したい`submitter`は`SubmitEvent`にあるものなので補完が効いていない原因はここにありそうです。
+
+他のEventの型を追ってみると、同定義ファイルに`NativeFooEvent`なるものが多数定義されていて、`@types/react/global.d.ts`の型定義を参照していて、そこには以下のような記載がありました。
+
+```ts title="@types/react/global.d.ts"
+React projects that don't include the DOM library need these interfaces to compile.
+React Native applications use React, but there is no DOM available. The JavaScript runtime
+is ES6/ES2015 only. These definitions allow such projects to compile with only `--lib ES6`.
+
+Warning: all of these interfaces are empty. If you want type definitions for various properties
+(such as HTMLInputElement.prototype.value), you need to add `--lib DOM` (via command line or tsconfig.json).
+
+interface Event { }
+interface AnimationEvent extends Event { }
+...
+```
+
+つまりtsconfigのlibでDOMを指定していれば、そこから型情報を読み取るということらしいです。
+設定した上で、ここに`SubmitEvent` を追加してあげれば`lib.dom.d.ts`の`SubmitEvent`を参照するようになります。
+この状態で先ほどの`SyntheticEvent`のEのデフォルト値を`SubmitEvent`にすると、`submitter`は補完されるようになりました。
+
+```ts title="@types/react/index.d.ts"
+type NativeSubmitEvent = SubmitEvent;
+
+...
+
+interface FormEvent<T = Element> extends SyntheticEvent<T, NativeSubmitEvent> {}
+```
+
+しかし、今度はnameが補完されません。
+SubmitEventの中を見てみると以下のようになっています。
+
+```ts title="typescript/lib/lib.dom.d.ts"
+interface SubmitEvent extends Event {
+    /** Returns the element representing the submit button that triggered the form submission, or null if the submission was not triggered by a button. */
+    readonly submitter: HTMLElement | null;
+}
+```
+
+`Returns the element representing the submit button that triggered the form submission`と書いてるので、`HTMLElement`ではなくnameプロパティのある`HTMLButtonElement`を型定義にしてあげれば補完が効くようになりました。
+
+### PRを出してみる
+
+せっかくなのでここまでの内容をPR出すかと思って作ってみたんですが、結論うまくいきませんでした
+
+というのもすでに現状の`FormEvent`が色々な型定義で参照されているため、他のpackageでは型の整合性が取れずテストが落ちまくりました…修正するのも憚られる量だったので諦めました
+
+`submitter`の方の型定義だけでも修正しようかと思ったんですが、こちらも修正までの道のりが険しそうな気がして断念しました
+
+すでに他のいろいろなライブラリで使用されているので破壊的変更になってしまうので放置されているのだと思ってます
+
+### 型定義を拡張する
+
+現状型定義がうまく補完されず怒られるので、以下のようにしてしまっています
+
+```tsx
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+const submitName = e.nativeEvent.submitter?.name
+```
+
+一応アンビエントモジュールを使って`SubmitEvent`を使う`FormEvent`を定義してそれを使うようにすれば`submitter`の補完は効くようになります。
+
+が、今回は`submitName`はリテラル型として扱いたく、結局補完させたところでstring型にしかならないので`as`でキャストすることになりそうです。
+
+そこまでする程のことでもないかと思い、今回は元の形のまま`@ts-ignore`する形に落ち着きました
+
+## まとめ
+
+submit時にformのバリデーションを効かせつつ、どの保存ボタンが押されたかを判別するためには`e.nativeEvent.submitter?.name`を使うとよい
+
+やりたいことはシンプルだったんですが、どうすれば型の補完が効くかを深掘りできていい経験になりました。
