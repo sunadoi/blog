@@ -1,0 +1,224 @@
+---
+title: Next.jsをstandaloneモードでビルドする
+ogImageTitle: Next.jsを,standaloneモードでビルドする
+description: Next.jsをDockerfileでbuildする時に、standaloneモードでビルドする方法
+tags: Next.js,Docker
+icon: Next.js
+publishedAt: 2022/12/28
+updatedAt: 2022/12/28
+---
+
+諸々の事情があってNext.jsをDockerで動かすことになったのですが、モノレポでの記述方法で毎回つまづくのでそのメモ記事です。
+また、v12で追加されたstandaloneモードを使ってDockerfileを記述したので、その過程で色々調べたことやstandaloneモードの有無によるファイルサイズの検証も一緒に記載してあります。
+
+## モノレポでのDockerfileの記述
+
+まずディレクトリ構成を簡略化して記述します。
+
+```plaintext
+.
+├── front
+│   ├── Dockerfile
+│   └── package.json
+├── server
+│   └── package.json
+├── shared
+│   └── package.json
+├── docker-compose.yml
+├── package.json
+└── yarn.lock
+```
+
+今回はyarnのworkspace機能を使ってモノレポ化している想定です。
+Next.jsのコンテナ化なのでfrontディレクトリ配下の`package.json`を使用しますが、`yarn.lock`はルート直下にあることを考慮する必要があります。
+
+また、frontもserverもそれぞれ`Dockerfile`が必要になりますが、これは各ディレクトリ配下に配置することとします。
+コンテナで環境を立ち上げる時はそれらをまとめて立ち上げるので、`docker-compose.yml`はルート直下に配置します。
+
+### docker-compose.yml
+
+ここではfrontのコンテナの分しか記述しません。
+
+```yml title="compose.yml"
+version: '3.7'
+services:
+  front:
+    build:
+      context: .
+      dockerfile: ./front/Dockerfile
+    ports:
+      - "3000:8080"
+    volumes:
+      - ./front:/app
+    command: yarn dev
+```
+
+ポイントはbuildの部分で、デフォルトだと`docker-compose.yml`がある場所と同じ場所の`Dockerfile`を読み込もうとするので、明示的に`Dockerfile`の場所を指定してやります。
+
+さらにcontextはカレントディレクトリを指定しています。
+これは後ほど見るように`Dockerfile`内でルート直下にある`yarn.lock`を参照する必要があるので、`front`以下をcontextとしてしまっているとcontext外を参照することになりdockerがエラーを吐くからです。
+
+### Dockerfile
+
+肝心のDockerfileを見ていきます。
+
+[公式のGitHub](https://github.com/vercel/next.js/tree/canary/examples/with-docker)に例があったのでわりとそのままパクリです。
+まず、standaloneモードでビルドするので、`next.config.js`に以下の記述を追加しておきます。
+
+```js title="next.config.js"
+{
+  output: "standalone"
+}
+```
+
+その上でDockerfileを以下のように記述します。
+
+```dockerfile title="Dockerfile"
+FROM node:18.12.1-alpine as deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+COPY ./front/package.json ./yarn.lock ./
+RUN yarn --frozen-lockfile
+
+FROM node:18.12.1-alpine as builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY ./front/ ./
+RUN yarn build
+
+FROM node:18.12.1-alpine as runner
+WORKDIR /app
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+COPY --from=builder /app/next.config.js ./
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+RUN apk add --no-cache tini
+ENTRYPOINT ["/sbin/tini", "--"]
+
+USER nextjs
+EXPOSE 8080
+ENV PORT 8080
+
+CMD ["node", "server.js"]
+```
+
+先ほどの`docker-compose.yml`でcontextをルート直下にしたので`package.json`などをCOPYをする時は`./front/package.json`のようにしていますが、`yarn.lock`はルート直下に存在しているので`./yarn.lock`としています。
+
+公式の記述と違うところは22-23行目のところ。
+これはレビューで指摘もらって初めて知ったんですが、`node`コマンドをそのまま実行するとPID1問題が発生するのでその対応として入れています。
+
+今回はマルチステージビルドで記述していて、かつstandaloneモードを使っているおかげかイメージサイズは192MBでした。
+後ほどstandaloneモードを使わない場合のサイズを測定して比較します。
+
+### GitHub ActionsでのECRへのpush
+
+ここまでで`docker compose`を使って開発環境を構築することはできるようになりました。
+今回はECS上で動かすためECRへイメージをpushする必要があります。
+
+該当の記述部分は以下です。
+
+```yml
+env:
+  ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+run: |
+  docker buildx build \
+    --platform linux/arm64 \
+    -t $ECR_REGISTRY/front-test:${{ needs.set_up.outputs.tag }} \
+    -f ./front/Dockerfile \
+    --push \
+    .
+```
+
+これは本当はマーケットプレイスにある`docker/build-push-action`を使って書くとcacheが効いていい感じに記述できそうです。
+
+(ここには記述していませんが、今回は実は今までルート直下として記述してきたディレクトリはルートからもう一段ネストした場所に存在しているので、上記のymlファイルの記述では`working-directory`としてそのディレクトリを記述しています。この`working-directory`と`docker/build-push-action`を併用して書くことができなかったため、上記のように直接`docker`コマンドを`run`に記述する形になりました。)
+
+これで開発環境もコンテナ化でき、ECRへのイメージpushもCIとして組み込むことができるようになりました。
+
+## standaloneモードの有無によるイメージサイズの変化
+
+さて、ここまではNext.jsのv12？から追加されたstandaloneモードを使ってdockerのビルドを行なってきました。
+
+これによって`.next`ディレクトリ下に`standalone`フォルダが作成されます。
+プロジェクトで実際に利用しているファイルをのみを含めて、さらに`next start`コマンドの代わりに使用できる最小限の`server.js`ファイルを生成します。
+`node_modules`を含める必要もなくなるため、かなりイメージサイズが削減されます。
+
+とは言え、実はこれまでNext.jsでコンテナ化をしたことがないのでこれによってどれくらい削減できてるのかわかりません。
+
+ということで今回は`Dockerfile`を少し書き換えてstandaloneモードじゃない状態でビルドしてみてイメージサイズを比較してみます。
+
+まず`next.config.js`の`output`をコメントアウトします
+
+```js title="next.config.js"
+{
+  // output: "standalone"
+}
+```
+
+そして`Dockerfile`を書き換えます。
+
+```dockerfile title="Dockerfile"
+FROM node:18.12.1-alpine as deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+COPY ./front/package.json ./yarn.lock ./
+RUN yarn --frozen-lockfile
+
+FROM node:18.12.1-alpine as builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY ./front/ ./
+RUN yarn build
+
+FROM node:18.12.1-alpine as runner
+WORKDIR /app
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+COPY --from=builder /app/next.config.js ./
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next ./.next
+COPY ./front/package.json ./yarn.lock ./
+RUN yarn --frozen-lockfile --production=true
+// COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+// COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+RUN apk add --no-cache tini
+ENTRYPOINT ["/sbin/tini", "--"]
+
+USER nextjs
+EXPOSE 8080
+ENV PORT 8080
+
+CMD ["yarn", "start"]
+```
+
+standaloneモードじゃない場合は`.next`を丸ごとCOPYします。
+また、`node_modules`が必要になるので、`package.json`と`yarn.lock`をCOPYした上で`production=true`で`yarn install`することで用意しています。
+
+他の変更点としては起動コマンドを`yarn start`に変更しています。
+
+この状態でビルドした結果、イメージサイズが3.62GBになりました…
+
+さすがに大きすぎる気がするので何か間違ってるのかもしれません、、、
+が、特に問題なくコンテナを動かすこともでき、間違いはパッと見当たりませんでした
+もしかしたらもうちょっとイメージサイズ削減の余地があるのかもしれません。
+
+ここをこれ以上追及する気も特になかったので今回はこの結果を受け入れることにします。
+結果として、standaloneモードなしでは3.62GBだったのがstandaloneモードにしただけで192MBになったので減りすぎではというくらい減りすぎています。
+
+ここおかしいという箇所があったらご指摘いただけると嬉しいです。
+減るのは間違いなさそうなんですが、変化量に関しては参考程度にしてください。
+
+何はともあれ簡単な設定一つでここまで削減してくれるなんて素晴らしいですね。
+
+## まとめ
+
+Next.jsを初めてコンテナ化しましたが、公式のリポジトリ内にsampleがあるのはとてもありがたかったです。
+イメージサイズもかなり減りましたし、まさに至れり尽くせりでした。
+
+## 参考
+
+<EmbedLink url="https://github.com/vercel/next.js/tree/canary/examples/with-docker" />

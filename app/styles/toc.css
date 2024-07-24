@@ -1,6 +1,7 @@
 .toc-list-item {
   line-height: 2;
   font-size: 0.8rem;
+  margin-left: 1rem; /* ・の分の幅を確保 */
 }
 
 .toc-list-item a {
@@ -22,8 +23,5 @@
 
 .toc-list-item .node-name--H2::before, .toc-list-item .node-name--H3::before {
   content: "・ ";
-}
-
-.toc-list-item .node-name--H3 {
-  padding-left: 1.5rem;
+  margin-left: -1rem; /* ・の分の幅を打ち消す。折り返し時にインデントを下げるための調整。 */
 }
