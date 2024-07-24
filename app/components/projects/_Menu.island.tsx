@@ -2,9 +2,9 @@ import clsx from "clsx"
 import { useState } from "hono/jsx"
 import { Card } from "../parts/Card"
 import { AccountIcon } from "../parts/icons/Account"
+import { ArticleIcon } from "../parts/icons/Article"
 import { LinkIcon } from "../parts/icons/Link"
 import { TagsIcon } from "../parts/icons/Tags"
-import { ArticleIcon } from "../parts/icons/Article"
 
 export const Menu = () => {
   const [isOpen, setIsOpen] = useState(false)
