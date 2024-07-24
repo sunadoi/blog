@@ -1,7 +1,7 @@
 import type { JSX } from "hono/jsx/jsx-runtime"
 import { tv } from "tailwind-variants"
 
-type MessageType = "info" | "warn" | "alert"
+type MessageType = "info" | "tips" | "warn" | "alert"
 
 export const Message = ({
   children,
@@ -29,6 +29,10 @@ const message = tv({
       info: {
         bg: "bg-blue-3",
         icon: "text-blue-10",
+      },
+      tips: {
+        bg: "bg-green-3",
+        icon: "text-green-10",
       },
       warn: {
         bg: "bg-amber-3",
@@ -58,6 +62,21 @@ const MessageIcon = ({ type }: { type: MessageType }) => {
             fill-rule="evenodd"
             d="M22 12c0 5.523-4.477 10-10 10S2 17.523 2 12S6.477 2 12 2s10 4.477 10 10m-10 5.75a.75.75 0 0 0 .75-.75v-6a.75.75 0 0 0-1.5 0v6c0 .414.336.75.75.75M12 7a1 1 0 1 1 0 2a1 1 0 0 1 0-2"
             clip-rule="evenodd"
+          />
+        </svg>
+      )
+    case "tips":
+      return (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="100%"
+          height="100%"
+          viewBox="0 0 256 256"
+        >
+          <title>Tips Icon</title>
+          <path
+            fill="currentColor"
+            d="M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m45.66 85.66l-56 56a8 8 0 0 1-11.32 0l-24-24a8 8 0 0 1 11.32-11.32L112 148.69l50.34-50.35a8 8 0 0 1 11.32 11.32"
           />
         </svg>
       )
@@ -99,5 +118,7 @@ const MessageIcon = ({ type }: { type: MessageType }) => {
           />
         </svg>
       )
+    default:
+      return type satisfies never
   }
 }

@@ -18,9 +18,11 @@ updatedAt: 2023/03/20
 
 先に結論
 
+<Message type="tips">
 ・Dateの初期化はローカルでの開発時にTZを指定していないとJSTになる
 ・Dateの初期化はdeployした環境(Dockerfile使用)ではTZを指定していないとUTCになる
 ・JSTの日付ベースでの比較を行うときは比較対象を両方JSTのTZにしてから比較する必要がある
+</Message>
 
 
 今回動作確認した環境のバージョンは以下の通りです
