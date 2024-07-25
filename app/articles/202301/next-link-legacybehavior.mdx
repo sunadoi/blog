@@ -1,0 +1,102 @@
+---
+title: next/linkのlegacyBehaviorを使ってaタグの中にbuttonタグが入らないようにする
+ogImageTitle: next/linkのlegacyBehaviorを使って,aタグの中にbuttonタグが入らないようにする
+description: next/linkを使っていた際、これまでaタグの中にbuttonタグを入れてしまっていた。legacyBehaviorを使って入れ子にならないようにする方法を記載する。
+tags: Next.js
+icon: Next.js
+publishedAt: 2023/01/30
+updatedAt: 2023/01/30
+---
+
+next/linkが提供しているLinkコンポーネントを使用していた際、挙動としては問題なく動くもののHTMLの仕様的によろしくない実装をしてしまっていました。
+
+具体的にはaタグの中にbuttonタグを入れ子にしてしまっていました。
+[MDNのaタグのページ](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a#technical_summary "MDNのaタグのページ")を見ると`Permitted content`の欄に`interactive contents`をいれてはいけないと書いてあります。
+buttonは`interactive contents`に相当するのでまずそうです。
+入れても特にconsole上でエラーとかは見られなかったんですが、おそらく役割が不明瞭になるという点でアクセシビリティ上よくないってことなのではと推測しています。
+
+というわけで、これを解消するというのが本記事の主題です。
+ただ内容はNext.jsの公式ドキュメントに書いてある`legacyBehavior`を使う方法で、特に目新しいものはありません。
+HTMLの仕様を意識してコードを書こうという自戒を込めて記事にしておきます。
+
+<Message>
+動作確認バージョン
+Next 13.1.4
+</Message>
+
+## 問題になっていたコード
+
+Next.jsのv13ではnext/linkで提供されているLinkコンポーネントがaタグを内包するようになりました。
+
+<EmbedLink url="https://nextjs.org/docs/upgrading#v13-summary" />
+
+```tsx
+import Link from 'next/link'
+
+// Next.js 12: `<a>` has to be nested otherwise it's excluded
+<Link href="/about">
+  <a>About</a>
+</Link>
+
+// Next.js 13: `<Link>` always renders `<a>` under the hood
+<Link href="/about">
+  About
+</Link>
+```
+
+画面遷移するUIを表現する際、見た目がボタンであることはわりと一般的なんじゃないかなと思います。
+今回もそのようなUIだったので、当初以下のように画面遷移するボタンを表現していました。
+(ちなみに`Button`コンポーネントはMantineというUIライブラリのものを使っています)
+
+```tsx
+<Link href="/foo">
+  <Button>fooへ</Button>
+</Link>
+```
+
+しかし、これだとLinkタグがaタグを内包しているのでレンダリング結果は以下のようになってしまい、aタグの中にbuttonタグが含まれてします。
+
+```html
+<a href="/foo">
+  <button>fooへ</button>
+</a>
+```
+
+これはHTMLの仕様的によろしくないので対策しないといけません。
+
+## legacyBehaviorを使う
+
+対策の仕方としてはbuttonタグを使わずにボタンの見た目になるような実装が必要です。
+
+頑張ってCSSでゴリ押ししてもいいんですが、あまりやりたくないので今回はUIコンポーネントの仕様を活かす方向で考えます。
+MantineではButtonコンポーネントに`component`のpropsがあり、`component="a"`とすると見た目そのままにaタグとしてレンダリングされます。
+
+Next.jsのv13から導入された`legacyBehabior`はv12までの仕様に戻すものであり、つまりLinkコンポーネント自体がaタグを内包しなくなります。
+
+これらを組み合わせると無事、見た目はこれまで通りボタンでaタグとして画面遷移するものが出来上がります。
+(passHrefは小要素の`href`propsにLinkのhrefを渡すためのもの)
+
+```tsx
+<Link href="/foo" legacyBehavior passHref>
+  <Button component="a">fooへ</Button>
+</Link>
+// → <a href="/foo">fooへ</a>
+```
+
+ちなみにコンポーネントをaタグにしなくても挙動としては変わらないが、その場合はbuttonタグで画面遷移していることになってしまうので避けています。
+
+buttonタグどころかコードをパッと見た感じだとおそらく`onClick`が生えているものならなんでも良さそうなので、内部で`onClick` で画面遷移させていそう？(ちゃんと読み解けておらず、自信はないです…)
+
+## まとめ
+
+aタグの中にbuttonタグが入らないように回避する方法として、今回はbuttonコンポーネントを見た目そのままにaタグにして`legacyBehavior`を使いました。
+
+Mantineの`Button`コンポーネントにaタグにするためのpropsがあってよかった…
+
+あとこれまでHTMLの仕様とかそんなに意識せずに書いてしまってたなーという反省。
+
+できるところからちゃんと意識して書いていこうと思いました。
+
+## 参考
+
+<EmbedLink url="https://nextjs.org/docs/api-reference/next/link#if-the-child-is-a-tag" />
