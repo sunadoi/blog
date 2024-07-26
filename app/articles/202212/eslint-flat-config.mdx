@@ -1,0 +1,273 @@
+---
+title: eslintをflat configで書き換える
+ogImageTitle: eslintを,flat configで書き換える
+description: eslintの設定をflat configで置き換えてみました。
+tags: ESLint,JavaScript,TypeScript
+icon: ESLint
+publishedAt: 2022/12/21
+updatedAt: 2022/12/21
+---
+
+本記事は[「つながる勉強会 Advent Calendar 2022」](https://adventar.org/calendars/7752)の 21 日目の記事です。
+
+前日も自分の記事で、[「eslintのpluginsとextendsの違いを理解する」](https://suna.dev/articles/eslint-settings "「eslintのpluginsとextendsの違いを理解する」")です。
+前回の記事でeslintの設定について勘違いしやすい場所を解説したのでよかったら見てみてください。
+
+この記事ではその内容を理解した上で、いよいよflat configに置き換えていきます。
+
+<EmbedLink url="https://eslint.org/blog/2022/08/new-config-system-part-2/" />
+
+## 書き換え前
+
+書き換え前のeslintの設定を見た後に、実際にそれを置き換えていくというステップで進めていきます。
+
+今回はこんな設定を考えてみます。
+
+```json title=".eslintrc.json"
+{
+  "extends": ["plugin:@typescript-eslint/recommended", "next/core-web-vitals", "prettier"],
+  "rules": {
+    "import/no-duplicates": "error",
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": ["next/link"],
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["src/components/Link.tsx"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ]
+}
+```
+
+shareable confisとして読み込んでいるのは3つです。
+
+- plugin:@typescript-eslint/recommended
+- next/core-web-vitals
+- prettier
+
+ルールとして自分で設定しているのは`eslint-config-import`の`no-duplicates`とeslint標準の`no-restricted-imports`のみです。
+`no-restricted-imports`ではNextのLinkのimportを`src/components/Link.tsx`以外で禁止しています。
+(Linkを拡張した独自コンポーネントを定義して、それしか使えなくするためのルール)
+
+ちなみに`plugins`に`import`を記述していませんが、それでも`import`のルールが適用されるのは`next/core-web-vitals`の中の`plugins`に`import`が記載されているからです。
+
+## flat configで書き換える
+
+flat configの特徴はその名の通り、flatな設定の書き方であり、以下のように配列の中に適用させたい設定を順にオブジェクトの形で書いていきます。
+この時前から順に適用されていき、それぞれの対象ファイルは`files`に該当するファイルに制限されます。
+
+```js title="eslint.config.js"
+module.exports = [
+  {
+    ...
+    rules: { ... }
+  },
+  {
+    ...
+    files: ["*.ts", "*.tsx"],
+    rules: { ... }
+  }
+]
+```
+
+新しいflat configでは`extends`の項目はありません。
+そのため、どのルールを適用するかは明示的に書く必要があります。
+
+一応後方互換性のための`FlatCompat`なるClassが`eslint/eslintrc`からexportされているのでそれを使えば`extends`を使うこともできますが、今回はせっかくflat configを使うのでその使用は最小限にしました。
+
+一気に置き換えると何が何だかわからなくなりそうなので部分ごとに置き換えていきます。
+以前までは設定ファイルは`json`だったり`yaml`だったりと色んな書き方ができましたが、flat configで読み込めるのは`eslint.config.js`のみです。
+
+ちなみに諸事情により今回はCommonJSで記載していきます。
+flat config自体はESMで記載できます。
+
+### eslint-config-prettier
+
+まず`eslint-config-prettier`ですが、内部実装を見てみるとこれが`extends`で読み込んでいたのは膨大な量のrulesのみです。
+従って以下のように`rules`に展開してあげればそれだけで良さそうです。
+
+```js title="eslint.config.js"
+const prettier = require("eslint-config-prettier")
+
+module.exports = [
+  {
+    rules: {
+      ...prettier.rules,
+    },
+  },
+]
+```
+
+### next/core-web-vitals
+
+これは`eslint-config-next`というパッケージの中の`core-web-vitals.js`の内容を読み込んでいます。
+それを見てみると以下のような記述がありました。
+
+```js title="eslint-config-next/core-web-vitals.js"
+module.exports = {
+  extends: [require.resolve('.'), 'plugin:@next/next/core-web-vitals'],
+}
+```
+
+つまり、`@next/eslint-plugin-next`の`core-web-vitals.js`を読み込んでいるということなのですが、この内部実装がどうなってるのかは探せませんでした。
+
+従って、ここは諦めて先述した`FlatCompat`を使って`extends`することにしました。
+
+```js title="eslint.config.js" {1,4,7}#add
+const { FlatCompat } = require("@eslint/eslintrc")
+const prettier = require("eslint-config-prettier")
+
+const compat = new FlatCompat()
+
+module.exports = [
+  ...compat.extends("next/core-web-vitals"),
+  {
+    rules: {
+      ...prettier.rules,
+    },
+  },
+]
+```
+
+### @typescript-eslint/eslint-plugin
+
+元の設定ではconfigsの`recommended`を`extends`していました。
+この部分の実装を見てみると下記のようになっていました。
+
+```js
+extends: ['./configs/base', './configs/eslint-recommended'],
+```
+
+<EmbedLink url="https://github.com/typescript-eslint/typescript-eslint/blob/9e35ef9af3ec51ab2dd49336699f3a94528bb4b1/packages/eslint-plugin/src/configs/recommended.ts#L6" />
+
+baseの方はただのparserの設定です。
+`recommended`の中で`eslint-recommended`を`extends`しています。
+この2つはどちらもrulesの設定のみなので、parserの設定とこの2つのrulesを展開してあげれば良さそうです。
+
+```js title="eslint.config.js" {3,4,10-22}#add
+const { FlatCompat } = require("@eslint/eslintrc")
+const prettier = require("eslint-config-prettier")
+const ts = require("@typescript-eslint/eslint-plugin")
+const tsParser = require("@typescript-eslint/parser")
+
+const compat = new FlatCompat()
+
+module.exports = [
+  ...compat.extends("next/core-web-vitals"),
+  {
+    files: ["src/**/*.ts", "src/**/*.tsx"],
+    languageOptions: {
+      parser: tsParser,
+    },
+    plugins: {
+      "@typescript-eslint": ts,
+    },
+    rules: {
+      ...ts.configs["recommended"].rules,
+      ...ts.configs["eslint-recommended"].rules,
+    },
+  },
+  {
+    rules: {
+      ...prettier.rules,
+    },
+  },
+]
+```
+
+こんな感じで`ts`, `tsx`ファイルを対象にして`recommended`と`eslint-recommended`の2つのrulesを展開しています。
+また、以前までとは違い、`parser`や`plugins`の設定も明示的に行う必要があります。
+
+### 残ったルールの設定
+
+あと記載していないルールは`import/no-duplicates`と`no-restricted-imports`のみです。
+
+一気に2つ追記します。
+
+```js title="eslint.config.js" {23-34,37}#add
+const { FlatCompat } = require("@eslint/eslintrc")
+const prettier = require("eslint-config-prettier")
+const ts = require("@typescript-eslint/eslint-plugin")
+const tsParser = require("@typescript-eslint/parser")
+
+const compat = new FlatCompat()
+
+module.exports = [
+  ...compat.extends("next/core-web-vitals"),
+  {
+    files: ["src/**/*.ts", "src/**/*.tsx"],
+    languageOptions: {
+      parser: tsParser,
+    },
+    plugins: {
+      "@typescript-eslint": ts,
+    },
+    rules: {
+      ...ts.configs["recommended"].rules,
+      ...ts.configs["eslint-recommended"].rules,
+    },
+  },
+  {
+    files: ["src/**/*.tsx"],
+    ignores: ["src/components/Link.tsx"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: ["next/link"],
+        },
+      ],
+    },
+  },
+  {
+    rules: {
+      "import/no-duplicates": "error",
+      ...prettier.rules,
+    },
+  },
+]
+```
+
+`import/no-duplicates`は単に追記しただけです。
+
+`no-restricted-imports`の方は`ignores`に適用しないファイルを指定しています。
+このおかげでルールを一括で適用して`overrides`で例外を上書きするという構文を避けることができています。
+
+こんな感じで適用したいファイルとルールの組み合わせごとにオブジェクトで定義して、それらが配列として順に適用されるというような感じでしょうか。
+
+shareable configsをextendsする構文が無くなったことで、全体の記述量は多くなりましたが、どのルールがどんなふうに適用されているのかが明示的になってかなり読みやすくなったのではないかと思います。
+
+以前までの書き方だと、どのpluginがどのタイミングで適用されているのかが暗黙的でよくわからない上にルールの上書きが起こっていると非常に読み解きにくかったので、記述が長くなったとしても個人的にはflat configの方が断然好きです。
+
+ところで`eslint-config-prettier`は`extends`の時は一番最後に書くのが推奨されていたので、それに倣い最後に記載する形にしました。
+競合した場合にこちらのルールを優先させたかったからです。
+
+逆に言えば、競合しない全体で適用させたいような設定は一番最初に記載しておくことで、これまでの`extends`によるshareable configsとまでは行かないまでもある程度全体のベース設定として使えるのではないでしょうか。
+
+ただ、今回書き換えるに当たって、どのrulesを適用させればいいかなどはライブラリの内部実装を見ながら地道に対応していきました。
+正直適用しているpluginが多い場合は面倒です。
+この辺はエコシステムが成熟してもうちょっと楽に設定できる未来が来ることを祈ってます。笑
+
+## まとめ
+
+従来のeslintの設定ファイルを実際にflat configで書き換えていきました。
+
+記述量は長くなるかもしれないけど、明示的でわかりやすくなって個人的には積極的に使っていきたいなと思いました。
+
+まだexperimentalな機能で情報も少ないので参考になったら嬉しいです。
+間違ってるところなどあったら指摘いただけると嬉しいです。
+
+## 参考
+
+<EmbedLink url="https://eslint.org/docs/latest/user-guide/configuring/configuration-files" />
+
+<EmbedLink url="https://zenn.dev/babel/articles/eslint-flat-config-for-babel#%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E3%82%B7%E3%82%B9%E3%83%86%E3%83%A0%E4%B8%8A%E3%82%92%E3%82%AB%E3%82%B9%E3%82%B1%E3%83%BC%E3%83%89%E3%81%97%E3%81%AA%E3%81%84" />
+
+<EmbedLink url="https://zenn.dev/makotot/articles/0d9184f3dde858#%E3%81%93%E3%82%8C%E3%81%BE%E3%81%A7%E3%81%AEconfig%EF%BC%88eslintrc%EF%BC%89%E3%81%A8flat-config%E3%82%92%E6%AF%94%E8%BC%83%E3%81%99%E3%82%8B" />
