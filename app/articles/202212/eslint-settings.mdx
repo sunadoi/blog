@@ -1,0 +1,197 @@
+---
+title: eslintのpluginsとextendsの違いを理解する
+ogImageTitle: eslintの,pluginsとextendsの違いを理解する
+description: eslintの設定のpluginsとextendsの違いを整理しました。
+tags: ESLint,JavaScript,TypeScript
+icon: ESLint
+publishedAt: 2022/12/20
+updatedAt: 2022/12/20
+---
+
+本記事は[「つながる勉強会 Advent Calendar 2022」](https://adventar.org/calendars/7752)の 20日目の記事です。
+19日目はあっこさんの以下の記事でした。
+
+<EmbedLink url="https://qiita.com/akko_merry/items/d92f7f3fa6db00220b6f" />
+
+結構色んな方が記事書いてるのでよかったら見てみてください。
+
+\*普段のブログは常体で書いてるのですが、Advent Calendarということもあり、今回は敬体で書くことにします。
+
+さて、数ヶ月前にeslintのflat configが発表されました。
+
+<EmbedLink url="https://eslint.org/blog/2022/08/new-config-system-part-2/" />
+
+これは設定ファイルの書き方に関するもので、これまでの書き方と色々と違うところがありますが、簡単に言うとよりシンプルな記述で設定を書けることを意図したものらしいです。
+詳細は以下の記事がとても参考になりました。
+
+<EmbedLink url="https://zenn.dev/babel/articles/eslint-flat-config-for-babel#%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E3%82%B7%E3%82%B9%E3%83%86%E3%83%A0%E4%B8%8A%E3%82%92%E3%82%AB%E3%82%B9%E3%82%B1%E3%83%BC%E3%83%89%E3%81%97%E3%81%AA%E3%81%84" />
+
+確かにeslintの設定ファイルって複雑になりがちでかなり読みにくいです。
+結局どのpluginが読み込まれてるのかわかりにくいし、特定のファイルのみに適用するルールの場合は全体でonにして、overridesで一部offに上書きという仕様はあまり直感的ではないように思います。
+
+そういったモヤモヤしたのがflat config使うとスッキリ解決するとのこと。
+
+というわけで従来していた設定をflat configで書き直そう！
+と思ったんですが、そのためにはそもそも従来通りの設定をちゃんと理解する必要があるというわけで、この記事ではこれまで雰囲気で書いていたeslintの設定の意味をちゃんと調べて理解できたことをメモしていくことにします。
+特にpluginsとextendsの挙動の違いが理解できてなかったのでその内容が中心になります。
+
+そして次回の記事で実際にflat configを使って書くと記述がどう変わるのかを見ていきます。
+
+本記事では主に以下のことを書いています。
+
+- プロパティにある`extends`と`plugins`の挙動の違い
+- eslint-config-xxxとeslint-plugin-xxxの違い
+
+十分調べて書いたつもりですが、間違っていたら教えてください。
+
+
+## pluginsとは
+
+おそらく`plugins`の方から説明する方がわかりやすい気がしたので`plugins`から。
+
+pluginとは、ESLintに様々な拡張機能を追加するためのnpmパッケージです。
+新しいルールの追加やshareable configsのexportができるようになります。
+
+<EmbedLink url="https://eslint.org/docs/latest/user-guide/configuring/configuration-files#using-a-configuration-from-a-plugin" />
+
+shareable configsの話はextendsの際に説明するので一旦後回しにして、最も基本的な？新しいルールの追加機能を見ていきます。
+
+例として`import`に関するあれこれのルールを追加できる`eslint-plugin-import`というパッケージをインストールします。
+そして以下のように`plugins`に`import`を書いて、`rules`の中に該当ルールを記載すれば適用されます。
+
+```json title=".eslintrc.json"
+{
+  "plugins": ["import"],
+  "rules": {
+    "import/no-unresolved": "error"
+  }
+}
+```
+
+`plugins`の中に書いた`import`は`eslint-plugin-import`を使用することを指しています。
+このパッケージによらず、`eslint-plugin-`は省略して書くことができる仕様になっているようです。
+
+この時、pluginはあくまでルールセットを拡張するだけなので、実際にどのルールを適用させるかはrulesの中に記載する必要があります。
+(\*後に記載するshareable configsを使わない場合は)
+
+## extendsとは
+
+shareable configsに書かれた設定を継承するためのプロパティです。
+
+### shareable configsとは？
+
+先ほども`plugins`で出てきたのでここでちゃんと説明しておきます。
+
+eslintの設定は様々なプロジェクトで何度も同じような設定を書いて使うことが多いです。
+そのため、そういった一連の設定をnpmパッケージで管理しておいて読み込んで使えると簡単に共有できて良さそうに思えます。
+
+これを実現したのがshareable configsであり、簡単に言えば色んな設定が既に書かれたeslintの設定ファイルと言って差し支えないのではないでしょうか。
+先述した`plugins`だけでなく`rules`や`env`など、eslintの設定ファイルに記載する内容があらかじめ定義されています。
+
+つまり、該当のnpmパッケージをinstallして、`extends`で読み込めば適用されるようになっています。
+読み込み方はpluginの時と似ていて、`eslint-config-foo`というnpm packageならば`eslint-config-`の部分は省略できます。
+つまり、`eslint-config-prettier`をinstallして、`"extends": ["prettier"]`と書けば`eslint-config-prettier`の内容が適用されます。
+
+参考までに`eslint-config-prettier`の中身を見てみると以下のようになっていました。
+
+```js title="eslint-config-prettier.js"
+module.exports = {
+  rules: {
+    // The following rules can be used in some cases. See the README for more
+    // information. (These are marked with `0` instead of `"off"` so that a
+    // script can distinguish them.)
+    "curly": 0,
+    "lines-around-comment": 0,
+    "max-len": 0,
+    ...
+  }
+}
+```
+
+様々なルールが設定されているのが見てとれます。
+そのため、`plugins`とは違って、`extends`で読み込めば`rules`の中を自分で設定しなくても適用されるルールが存在し得ます。
+
+`extends`の中で被った設定に関しては後の方が優先して適用される仕様になっています。
+prettierとeslintを同時に使う際に競合しないようにするには、現在上記の方法が推奨になっていますが一番最後に書くのも納得です。
+
+## pluginによるshareable configsのexport
+
+`plugins`内の記述で「shareable configsのexportができる」と記載しました。
+
+例として`eslint-plugin-react`の中身を見てみると、以下のような`configs`というプロパティが見つかります。
+
+```js
+configs: {
+  recommended: {
+    plugins: [
+      'react',
+    ],
+    parserOptions: {
+      ecmaFeatures: {
+        jsx: true,
+      },
+    },
+    rules: {
+      'react/display-name': 2,
+      'react/jsx-key': 2,
+      'react/jsx-no-comment-text',
+      ...
+    },
+  },
+  all: { ... },
+  'jsx-runtime': { ... }
+}
+```
+
+ここには`recommended`と`all`と`jsx-runtime`が存在していて、それぞれに必要なルールをはじめとして`plugins`と`parserOptions`が設定されています。
+
+そう、これはまるでshareable configsであり、`eslint-plugin-foo`というパッケージの中で`configs`にshareable configsを設定してexportすることができるということです。
+
+<EmbedLink url="https://eslint.org/docs/latest/developer-guide/working-with-plugins#configs-in-plugins" />
+
+これは`extends`で以下のように記載すれば適用されます。
+
+```json
+"extends": ["plugin:[plugin名]/[config名]"]
+```
+
+ここでも例によってplugin名のところは`eslint-plugin-`を省略できます。
+
+従って以下の設定は`eslint-plugin-react`のパッケージの中にある`configs`の`recommended`部分を適用するという意味になります。
+
+```json
+"extends": ["plugin:react/recommended"]
+```
+
+### pluginsに明記しなくてもルールが適用されるケース
+
+実は`extends`に以下のように設定した場合は`plugins: ["react"]`を記載しなくても適用されます。
+
+```json
+"extends": ["plugin:react/recommended"]
+```
+
+その理由は、この`recommended`の設定の中で`plugins: ['react']`が既に記載されているためです。
+上書きしたり追加したりしたいルールがあった場合はそのまま`rules`の中に書けば適用されます。
+
+`plugins`に書いてないのにルールが適用されるというのはこのような`extends`した中で既に`plugins`が記載されているというケースのはずです。
+ただし、実際に使う`plugin`のnpmパッケージ自体はインストールしておく必要があります。
+
+## まとめ
+
+`esling-plugin-foo`は様々な拡張機能を追加するためのnpmパッケージであり、以下のことができるようになります。
+
+- 新しいルールの追加 (`plugins`に記載)
+- shareable configsのexport (`extends`に`plugin: [plugin名]/[config名]`の形で記載)
+
+`eslint-config-foo`は再利用可能な様々な設定を含んだnpmパッケージであり、`extends`に書くことでルールをはじめとした諸々の設定が適用されます。
+
+個人的には`eslint-plugin-`が省略されるみたいな仕様は逆に依存関係がわかりにくくなってかなり微妙だなと思ってます(実際今回ちゃんと調べるまで理解できてなかったです)
+
+ただしそれもflat configを使うと依存関係が明示的になっていてよかったので次の記事で紹介します
+
+## 参考
+
+<EmbedLink url="https://zenn.dev/kimromi/articles/b7cf98005f3193" />
+
+<EmbedLink url="https://blog.ojisan.io/eslint-plugin-and-extend/" />

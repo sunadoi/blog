@@ -1,6 +1,7 @@
 import { AWSIcon } from "@/components/parts/icons/AWS"
 import { DBIcon } from "@/components/parts/icons/DB"
 import { DockerIcon } from "@/components/parts/icons/Docker"
+import { ESLintIcon } from "@/components/parts/icons/ESLint"
 import { GoIcon } from "@/components/parts/icons/Go"
 import { JavaScriptIcon } from "@/components/parts/icons/JavaScript"
 import { MySQLIcon } from "@/components/parts/icons/MySQL"
@@ -20,6 +21,7 @@ export type ArticleIconKey =
   | "NestJS"
   | "Node.js"
   | "prisma"
+  | "ESLint"
   | "Go"
   | "MySQL"
   | "Docker"
@@ -38,6 +40,7 @@ export const ArticleIconMap = new Map<
   ["NestJS", NestJSIcon],
   ["Node.js", NodeJSIcon],
   ["prisma", PrismaIcon],
+  ["ESLint", ESLintIcon],
   ["Go", GoIcon],
   ["MySQL", MySQLIcon],
   ["Docker", DockerIcon],
