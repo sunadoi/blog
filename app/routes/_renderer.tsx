@@ -1,7 +1,7 @@
 import { Footer } from "@/components/projects/Footer"
 import { Header } from "@/components/projects/Header"
 import { baseURL, siteName } from "@/constants/site"
-import { getCanonicalURL } from "@/functions/getCanonicalURL"
+import { getCanonicalURL } from "@/functions/url"
 import { jsxRenderer, useRequestContext } from "hono/jsx-renderer"
 import { Script } from "honox/server"
 
