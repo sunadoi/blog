@@ -7,6 +7,7 @@ export const SNSButton = ({ slug }: { slug: string }) => {
       <a
         href={`https://x.com/share?url=${encodeURIComponent(`${baseURL}/articles/${slug}`)}`}
         target="_blank"
+        rel="noreferrer"
       >
         <div class="flex flex-col items-center gap-2 w-8 hover:scale-110 duration-150">
           <XIcon />

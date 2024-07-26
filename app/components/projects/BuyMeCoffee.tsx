@@ -7,6 +7,7 @@ export const BuyMeCoffee = () => {
         href="https://www.buymeacoffee.com/ysuna"
         target="_blank"
         className="rounded-xl shadow-lg hover:scale-105 duration-150"
+        rel="noreferrer"
       >
         <img
           src={getAssetPath("/assets/coffee_button.webp")}

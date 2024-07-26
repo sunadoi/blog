@@ -27,6 +27,7 @@ export default createRoute(async (c) => {
               <a
                 href="https://x.com/suna_tech"
                 target="_blank"
+                rel="noreferrer"
               >
                 <div class="w-6 hover:scale-110 duration-150">
                   <XIcon />
@@ -35,15 +36,13 @@ export default createRoute(async (c) => {
               <a
                 href="https://github.com/sunadoi"
                 target="_blank"
+                rel="noreferrer"
               >
                 <div class="w-6 hover:scale-110 duration-150">
                   <GitHubIcon />
                 </div>
               </a>
-              <a
-                href="https://sizu.me/suna"
-                target="_blank"
-              >
+              <a href="https://sizu.me/suna" target="_blank" rel="noreferrer">
                 <div class="w-6 hover:scale-110 duration-150">
                   <SizumeIcon />
                 </div>
