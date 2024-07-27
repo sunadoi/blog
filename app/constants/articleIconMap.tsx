@@ -2,6 +2,8 @@ import { AWSIcon } from "@/components/parts/icons/AWS"
 import { DBIcon } from "@/components/parts/icons/DB"
 import { DockerIcon } from "@/components/parts/icons/Docker"
 import { ESLintIcon } from "@/components/parts/icons/ESLint"
+import { GitIcon } from "@/components/parts/icons/Git"
+import { GitHubIcon } from "@/components/parts/icons/GitHub"
 import { GoIcon } from "@/components/parts/icons/Go"
 import { JavaScriptIcon } from "@/components/parts/icons/JavaScript"
 import { MySQLIcon } from "@/components/parts/icons/MySQL"
@@ -26,6 +28,8 @@ export type ArticleIconKey =
   | "MySQL"
   | "Docker"
   | "AWS"
+  | "GitHub"
+  | "Git"
   | "設計"
   | "データ"
 
@@ -45,6 +49,8 @@ export const ArticleIconMap = new Map<
   ["MySQL", MySQLIcon],
   ["Docker", DockerIcon],
   ["AWS", AWSIcon],
+  ["GitHub", GitHubIcon],
+  ["Git", GitIcon],
   ["設計", "📐"],
   ["データ", DBIcon],
 ])
