@@ -1,0 +1,212 @@
+---
+title: 自動生成コマンドの叩き忘れをCIで検知する
+ogImageTitle: 自動生成コマンドの叩き忘れをCIで検知する
+description: 自動生成コマンドを叩き忘れていた際に、CI上でコメントすることで検知する仕組みを作成した
+tags: GitHub,Git,DevOps
+icon: GitHub
+publishedAt: 2022/10/17
+updatedAt: 2022/11/22
+---
+
+とあるファイルAを変更した時に、自動生成コマンドを使って変更後の内容に基づいて別のファイルBを変更するものがあったとする。
+この時ファイルAを変更しても自動生成コマンドを叩き忘れればファイルBは変更されない。
+
+これをCI上で検知するためのGitHub Actionsを書いたのでまとめておく。
+今回はCI上でエラーにするだけでなく、PR上にコメントでメッセージを出せるようにもした。
+差分があった場合はこんな感じでコメントを発行してくれるようになった。
+![PR上でのBotによるコメントの画像](/assets/article/generate-ci/pr-comment.webp)
+
+## 背景
+
+改めて何がしたいかを記載する
+ファイルAを変更後、`scripts`にある自動生成コマンドを叩くとファイルBが変更されるとする
+
+```json title="package.json"
+"scripts": {
+    "generate": "tsx ./scripts/generate.ts"
+}
+```
+
+この`generate`コマンドを叩き忘れるとファイルBが変更されない。
+これをCI上で検知したい。
+
+## CI上で差分検知する
+
+方針としてはシンプルで、CI上で`generate`コマンドを叩いてそれによって差分があるかどうかを検知できればよい。
+差分検知は`git diff`を使えばよさそう。
+
+問題は`git diff`を行った時に差分があった場合はCIを落としたいのでエラーにする必要がある。
+オプションを見てみると`--exit-code`なるものがあって、これを付与すると意図した通り差分があった場合はエラーにしてくれる。
+
+ここまでを一旦CIとして記述してみると以下の様になった。
+(普段は`yarn`を使っているが、後に記述する事情からここでは`pnpm`を利用している)
+
+```yaml title=".github/workflows/ci.yml" {25-30}
+name: CI
+on:
+  pull_request:
+
+jobs:
+  check-code-generation:
+    runs-on: ubuntu-latest
+    name: 'Check Code Generation'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2.2.2
+        with:
+          version: 7
+      - name: Set node version to 18
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: 'pnpm'
+      - name: Install deps
+        run: pnpm install
+      - name: Generate code
+        run: pnpm run generate
+      - name: Check diff
+        run: |
+          git add .
+          git diff --cached --exit-code
+```
+
+`generate`コマンドを叩いてから`git add`して`git diff --cached --exit-code`で差分があった場合はエラーにしている。
+そのまま`git diff`せずにわざわざ`git add`している理由は、既存のファイルを編集した場合のみだけでなく、新しく作成したファイルや削除したファイルに関しても差分検知の対象とする必要があったため。
+
+CI上でエラーにするだけならこれで完成。
+
+## エラーになった時にPR上にコメントを出す
+
+CIが落ちた時には実際に`generate`コマンドを叩いて出てきた差分をコミットする必要がある。
+これをPR上のコメントで表示させることでユーザーに何をすべきかを提示する様にしたい。
+
+PR上にコメントを出すのは`github-script`を使用する。
+エラーになった際にこの処理を行う必要があるので、エラーでも処理を続ける必要がある。
+これを実装すると以下の様になった。
+
+```yaml title=".github/workflows/ci.yml" {6,14-15}
+- name Check diff
+  id: diff
+  run: |
+    git add .
+    git diff --cached --exit-code
+  continue-on-error: true
+- name: Comment
+  uses: actions/github-script@v6
+    with:
+      script: |
+        const script = require('${{ github.workspace }}/.github/workflows/commentCodeGeneration.js')
+        await script(github, context, ${{ steps.diff.outcome == 'success' }})
+- name: Status
+  if: ${{ steps.diff.outcome == 'failure' }}
+  run: exit 1
+```
+
+6行目でdiffを検知した際にエラーだったとしても処理を続けるようにしている。
+
+その後コメントするための`script`を実行している。
+この内容は後述する。
+
+最後にdiffがあった場合はCIをちゃんと落とすために`exit 1`でコード1で終了する。
+
+肝心のscript部分がこちら。
+
+```js title=".github/workflows/commentCodeGeneration.js"
+module.exports = async (github, context, isSuccess) => {
+  const { data: comments } = await github.rest.issues.listComments({
+    owner: context.repo.owner,
+    repo: context.repo.repo,
+    issue_number: context.issue.number,
+  });
+
+  const body = `Uncommitted changes were detected after runnning <code>generate</code> command.\nPlease run <code>pnpm run generate</code> to generate/update the related files, and commit them.`;
+
+  const botComment = comments.find(
+    (comment) => comment.user?.type === 'Bot' && comment.body?.includes(body)
+  );
+
+  if (isSuccess) {
+    if (!botComment) return;
+    await github.rest.issues.deleteComment({
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      comment_id: botComment.id,
+    });
+    return;
+  }
+
+  if (!botComment) {
+    await github.rest.issues.createComment({
+      issue_number: context.issue.number,
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      body,
+    });
+  }
+};
+```
+
+引数として処理に必要な`github`と`context`を受け取る。
+それに加えて`isSuccess`という`boolean`を受け取っていて、差分があった(=`isSuccess`がfalse)場合は以下のコメントをPR上に発行し、差分がなくなった(=`isSuccess`がtrue)場合はPR上のコメントを消すようにしている。
+
+> Uncommitted changes were detected after runnning `generate` command.
+> Please run `pnpm run generate` to generate/update the related files, and commit them.
+
+内容は若干違うが、差分があった場合はこんな感じでコメントをしてくれるようになった。
+![PR上でのBotによるコメントの画像](/assets/article/generate-ci/pr-comment.webp)
+
+### スクリプトファイルのTS化
+
+`github-script`の実装はTSで書かれていて型が付いている。
+GitHub Actions上で記載する部分はテンプレートとして書かないとなので型の恩恵は得られないが、今回の様にスクリプトファイルに切り出してそれを実行する場合はスクリプトファイルの方はTSにできる。
+ということでやってみた。
+
+```ts title=".github/workflows/commentCodeGeneration.ts"
+import type { context as ctx, GitHub } from '@actions/github/lib/utils';
+
+module.exports = async (
+  github: InstanceType<typeof GitHub>,
+  context: typeof ctx,
+  isSuccess: boolean
+) => {
+  ...
+}
+```
+
+型の内容は大元のコードを読んでそれと同じものにした。
+
+`github-script`でtsファイルは実行できなさそうだったので、上記のTSファイルは事前にトランスパイルしてから実行する必要があるため、以下のstepを追加。
+
+```yaml title=".github/workflows/ci.yml"
+- name: Transpile ts
+  run: pnpm exec tsc .github/workflows/commentCodeGeneration.ts --outDir .github/workflows
+```
+
+これでTSファイルを用意しておけばトランスパイルしたJSファイルを実行できる。
+
+## おまけ
+
+実は今回のこのCI、fakerというライブラリのissueでこの機能が欲しいというものがあったので、実際にPRを作ったものである。
+(このライブラリがpnpmを使っているため、今回はpnpmで記述した)
+
+<EmbedLink url="https://github.com/faker-js/faker/issues/813" />
+
+このPRがマージされた後、実際にこのCIによって差分を検知できたらしく、メンテナーの方からフィードバックをもらえた。
+これがめちゃくちゃ嬉しくて本当にやってよかったなと思えた！
+
+> I just want to report you back I LOVE THIS NEW FEATURE 😍
+
+<EmbedLink url="https://github.com/faker-js/faker/pull/1419#issuecomment-1278121420" />
+
+## まとめ
+
+普段から使用しているライブラリに対して役立つ機能を実装できたので、本当にやってよかった！
+
+以前もfakerにPR出してマージされたことはあったが、めちゃくちゃ簡単な修正だったのであまりやった感なかった。笑
+今回はちゃんとOSSコントリビュート出来たと思えたのと、PR上で色々やりとりしてかなり勉強になった。
+
+実装したCIもわりと汎用性あって別の箇所でも使えそうだなと思えたので、今後機会があれば使っていこうと思う。
