@@ -31,6 +31,7 @@ export type ArticleIconKey =
   | "GitHub"
   | "Git"
   | "設計"
+  | "DevOps"
   | "データ"
 
 export const ArticleIconMap = new Map<
@@ -52,5 +53,6 @@ export const ArticleIconMap = new Map<
   ["GitHub", GitHubIcon],
   ["Git", GitIcon],
   ["設計", "📐"],
+  ["DevOps", "⚙️"],
   ["データ", DBIcon],
 ])
