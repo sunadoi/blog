@@ -1,0 +1,521 @@
+---
+title: PDFが投稿された時にサムネイル画像を作成する
+ogImageTitle: PDFが投稿された時に,サムネイル画像を作成する
+description: Node.jsのストリーミング処理で、PDFをサムネ画像に変換する方法を紹介する。
+tags: Node.js,Firebase,Firestore
+icon: Node.js
+publishedAt: 2021/05/23
+updatedAt: 2021/06/12
+---
+
+チャットでpdf画像が投稿された時にサムネイル用の画像を作成するという処理を実装した
+
+ローカルで単純にpdfから画像を作成するコマンドを作成するだけならそんなに難しくなかったのだが、ファイルの読み取りからファイルの書き込みまでをNode.js上で一連の流れでやろうとすると色々難しかった
+そしてそれをfirebaseのイベントフックに絡めたりCloud Functions上で実行させたりしようとすると色々ハマったのでメモしておく
+
+この記事のメインの内容はNode.js上でpdfファイルを読み取ってjpegファイルを生成するという部分で、そこにfirebaseも絡んでるという感じ
+
+## やりたかったこと
+
+LINEのようなチャット機能があって、そこに画像が投稿されると画像のリサイズ処理を行うようになっていた
+流れとしては以下のような感じ
+
+**チャットで画像が投稿される
+→ firestorageに画像が格納されてその情報がfirestoreに格納される
+→ firestoreに新規データが作成された時にfunctionsがイベント発火し、画像のリサイズ処理が行われる
+→ firestorageにリサイズ画像を格納、firestoreにそのリサイズ画像へのファイルpathを追加する**
+
+この処理をパクってpdfが投稿された時に1ページ目のサムネイル画像(jpeg)を作成するということをやりたかった
+
+似たような処理があるからちょっと調べればいけるかなと思ってたけど思ったようにはいかなかった
+
+備忘録も兼ねるのでできるだけハマっていった順番通りに記載していく
+
+## 試したこと
+
+### 使用するライブラリの選定
+
+まずpdfから画像ファイルに変換する処理が必要なので実装方法を調べた
+
+すでにあった画像のリサイズ処理ではsharpというわりと有名なライブラリを使用していたので、これを使ってpdfファイルからjpegファイルを作成できないかと考えたが、公式ドキュメント的にはpdf読み込めなさそうだったので諦めた
+
+> This module supports reading JPEG, PNG, WebP, AVIF, TIFF, GIF and SVG images.
+
+[https://sharp.pixelplumbing.com/](https://sharp.pixelplumbing.com/)
+
+次にどうしようかという感じだが、シェルでpdfからjpegを生成できる**ImageMagick**なるツールがあって、さらにNode.js上で外部プロセスを実行できる**child process**というものがあるので、それを組み合わせればできそうと教えてもらった。
+(ImageMagickってRailsでgemで使った記憶あったけど、コマンドツールとしても存在するものだったんだ)
+
+#### child processとは
+
+Node.js の組み込みモジュールであり、実行中のnodeプロセスとは別のプロセスを生成する関数が揃っているモジュール
+つまりこれを使えばnode上で外部プロセスを扱うことができるようになる
+そしてその標準入出力をストリームとして扱うことができる
+
+つまり普段操作してるLinuxコマンドとかのシェル芸がnode上でできて色んな操作と結びつけたりできるようになる(と認識している)
+
+話を戻すと、このchild processを利用してNode.js上でImageMagickのコマンドを利用してpdfからjpeg画像を作成することができそうというわけである
+
+### ImageMagickを使ってpdfからjpegを生成する
+
+#### コマンドでローカルで実行
+
+早速まずローカルでコマンドを試してみた
+brew install imagemagickでインストールした後、以下のコマンドを実行
+convertコマンドでtmpディレクトリにあるpdfファイルの1ページ目だけをjpegファイルとして作成する処理
+
+```bash
+convert -density 300 -resize 1000x1000 /tmp/originFile.pdf[0] /tmp/resizedFile_.jpeg
+```
+
+#### Node.js上でローカルで実行
+
+無事成功したのでこれをNode上で実行するためにchild processを使って同じくローカルで試してみた
+child processは組み込みなので特にinstallとか必要なしだった
+
+以下のようにするとコマンドで試した時と同様リサイズされた画像が作成された
+
+```ts
+import { spawn } from 'child_process'
+
+const main = async () => {
+  return await new Promise<void>((resolve, reject) => {
+    const pdf2jpeg = spawn('convert', [
+      '-density',
+      '300',
+      '-resize',
+      '1000x1000',
+      '/tmp/originFile.pdf[0]',
+      '/tmp/resizedFile.jpeg',
+    ])
+    pdf2jpeg.stderr.on('data', data => console.log(data.toString()))
+    pdf2jpeg.on('close', () => resolve())
+    pdf2jpeg.on('error', reject)
+  })
+}
+
+main()
+```
+
+child processの中にはいくつか関数があって、プロセスを扱うものの中でも非同期処理として扱うexecだったり細かくデータを流して処理するストリームとして扱うspawnなどがある。今回はspawnを使用することにした
+(画像処理の処理内容的にはストリームにしたところで少しずつ処理することはできないらしいのでさほど恩恵はないかも)
+
+まずspawnの第一引数に実行するコマンドを書いて、第二引数にオプションを配列形式で繋げていく
+(pdf\[0\]としているのは1ページ目だけjpegにしたいから)
+
+spawnのプロセスをpdf2jpegという変数に格納している
+エラーが起こった場合は標準エラーのstderr.onで検知されて処理される
+処理が完了した時には`.on('close', () => resolve())`でresolveしてる
+
+#### Firebaseのstorageと接続させる
+
+無事ローカルのNode.js上で実行できたので、実際にfirebaseのstorageからpdfファイルを取得して、jpegを作成してstorageに格納させる処理を行う
+
+大まかな流れとしては以下の通り
+
+**① まずstorageからpdfファイルをダウンロードしてファイルとして書き込む
+② pdfファイルからjpegファイルを作成する
+③ jpegファイルをstorageに格納し、そこへのpathを返り値として返す
+(関数を呼び出す場所でfirestoreのjpegファイルのpath情報をupdateする)**
+
+実は上記方法だと①と②でそれぞれファイルを作成しているが、本当はファイルのダウンロードから一時ファイルの作成をせずに③に接続できる。
+ここではわかりやすいように一旦段階を分けるが、最後に流れをまとめたリファクタリングを行う
+
+以下が完成形のコード
+トップレベルのcreateImgFromPdfはファイル名をstringで受け取るようになっている
+流石に長すぎるので分割して説明していく
+
+```ts
+import { spawn } from 'child_process'
+import { createReadStream, promises } from 'fs'
+import { storage } from 'firebase-admin'
+import { v4 as uuidv4 } from 'uuid'
+
+export const createImgFromPdf: (name: string) => Promise<string> = async name => {
+  const thumbnailFile = storage()
+    .bucket()
+    .file(name.replace(/(\.[\w\d]+)$/i, `_1000x1000.jpeg`))
+
+  const firebaseStorageDownloadTokens = uuidv4()
+  const [originFile] = await storage().bucket().file(name).download()
+  await promises.writeFile(`/tmp/originFile_${firebaseStorageDownloadTokens}.pdf`, originFile)
+
+  await new Promise<void>((resolve, reject) => {
+    const pdf2jpeg = spawn('convert', [
+      '-density',
+      '300',
+      '-resize',
+      '1000x1000',
+      `/tmp/originFile_${firebaseStorageDownloadTokens}.pdf[0]`,
+      `/tmp/temp_${firebaseStorageDownloadTokens}.jpeg`,
+    ])
+    pdf2jpeg.on('close', () => resolve())
+    pdf2jpeg.on('error', reject)
+  })
+
+  return new Promise((resolve, reject) =>
+    createReadStream(`/tmp/temp_${firebaseStorageDownloadTokens}.jpeg`)
+      .pipe(thumbnailFile.createWriteStream())
+      .once('error', reject)
+      .once('finish', async () => {
+        await thumbnailFile.setMetadata({
+          metadata: { firebaseStorageDownloadTokens },
+        })
+        resolve(
+          `https://firebasestorage.googleapis.com/v0/b/${
+            thumbnailFile.bucket.name
+          }/o/${encodeURIComponent(
+            thumbnailFile.name,
+          )}?alt=media&token=${firebaseStorageDownloadTokens}`,
+        )
+      }),
+  )
+}
+```
+
+\*追記: onceを使ったエラーハンドリングでは不十分だったのでonを使うべき
+詳しくは[続編](https://www.sunapro.com/duplex-stream/)で解説
+
+まず最初のこの部分から
+
+```ts
+const thumbnailFile = storage()
+  .bucket()
+  .file(name.replace(/(\.[\w\d]+)$/i, `_1000x1000.jpeg`))
+
+const firebaseStorageDownloadTokens = uuidv4()
+const [originFile] = await storage().bucket().file(name).download()
+await promises.writeFile(`/tmp/originFile_${firebaseStorageDownloadTokens}.pdf`, originFile)
+```
+
+firebaseのstorageオブジェクトを使って、作成した画像への参照先をthumbnailFileという変数に格納する
+nameはファイル名なのでファイル名の最後を\_1000x1000.jpegにしている
+もちろんここではファイルへの書き込みはまだしていないので、実際のデータはまだ格納されていない
+
+その後同じくstorageオブジェクトを使って対象ファイルをダウンロードしてきてoriginFileとして格納し、それをfsのpromises.writeFileで/tmp配下originFileとして保存する
+この時、同じファイル名で投稿されても大丈夫なようにuuidでトークンを発行しそれをファイル名に付与させている
+
+#### fsとは
+
+child processと同じくNode.jsに組み込まれているモジュールであり、Node.js上でファイルを扱うための関数が揃ったモジュールである
+fsはfile systemの略
+
+ここでは非同期にファイルの読み書きをするためにfsの中のpromisesというオブジェクトを使用している
+これでダウンロードしてきた画像データを/tmp配下に書き込んでいる
+
+次のこの部分は先ほどローカルで試した部分と同じなので説明省略
+さっき/tmp配下に書き込んだpdfファイルの1ページ目からjpegファイルを作成して、同じく/tmp配下にtemp.jpegとして書き込む。uuidをファイル名に付与して上書きされないようにしてる
+
+```ts
+await new Promise<void>((resolve, reject) => {
+  const pdf2jpeg = spawn('convert', [
+    '-density',
+    '300',
+    '-resize',
+    `1000x1000`,
+    `/tmp/originFile_${firebaseStorageDownloadTokens}.pdf[0]`,
+    `/tmp/temp_${firebaseStorageDownloadTokens}.jpeg`,
+  ])
+  pdf2jpeg.on('close', () => resolve())
+  pdf2jpeg.on('error', reject)
+})
+```
+
+最後はこの部分
+
+```ts {2,3}
+return new Promise((resolve, reject) =>
+  createReadStream(`/tmp/temp_${firebaseStorageDownloadTokens}.jpeg`)
+    .pipe(thumbnailFile.createWriteStream())
+    .once('error', reject)
+    .once('finish', async () => {
+      await thumbnailFile.setMetadata({
+        metadata: { firebaseStorageDownloadTokens },
+      })
+      resolve(
+        `https://firebasestorage.googleapis.com/v0/b/${
+          thumbnailFile.bucket.name
+        }/o/${encodeURIComponent(
+          thumbnailFile.name,
+        )}?alt=media&token=${firebaseStorageDownloadTokens}`,
+      )
+    }),
+)
+```
+
+ここではstorageに書き込み処理をしてそこへのfilepathをresolveで返している
+
+まずfsモジュールの中の`createReadStream`を使って/tmp配下に先ほど作成したjpegファイルを指定して、そのファイルをストリームとして読み込む
+
+そのストリームを`pipe`でつないで、最初の部分で作成したサムネイル画像参照先が格納されているthumbnailFileに対して`createWriteStream`で書き込み処理を行う
+これによってfirebase上のstorageに書き込み処理が行われる
+
+pipeはLinuxコマンドの`|`だと思えばナルホドって感じ
+
+終わったら`.once('finish', ...)`の処理が行われてメタ情報が追加され、ファイルpathがresolveされる
+
+あとはこの関数を呼び出した部分でawaitすればファイルpathが取得できるので、それをfirestoreのthumbnailFilePathに格納してupdateすれば一件落着
+
+#### Cloud Functionsで実行
+
+無事firebaseのstorageと接続できたので実際にCloud Functionsで動作させてみた
+該当のfunctionのみをdeployしてpdfファイルを投稿してみた
+
+が、、、エラー。。。
+
+色々調べた結果、Cloud Functions上ではセキュリティの脆弱性対策の関係でImageMagickによってpdfから画像を作成することはできないらしい。。。
+
+[https://stackoverflow.com/questions/52998331/imagemagick-security-policy-pdf-blocking-conversion](https://stackoverflow.com/questions/52998331/imagemagick-security-policy-pdf-blocking-conversion)
+
+つまり頑張って書いてきた今までの処理ではCloud Functionsで動かすのは無理ということ。。。
+
+とは言えImageMagickが使用できないというだけで、大まかな処理の方向性としては間違っていない
+実際、Ghostscriptという別のコマンドを使用するとうまくいった
+
+### Ghostscriptを使ってpdfからjpegを生成する
+
+#### ローカルで実行する
+
+child processのspawn内でImageMagickのconvertを使用していた部分を以下のようにghostscriptを使用するように変更した
+
+```ts
+const pdf2jpeg = spawn('gs', [
+  '-sDEVICE=jpeg',
+  '-r300',
+  '-o',
+  `/tmp/temp_${firebaseStorageDownloadTokens}.jpeg`,
+  `/tmp/originFile_${firebaseStorageDownloadTokens}.pdf`,
+])
+```
+
+ghostscriptのコマンドはgs
+imagemagickの時と入力ファイル、出力ファイルの順番が逆だった
+
+ただ、ローカルで実行した結果を確認するとエラーは出ていないものの、ファイルがうまく開けなかった。。
+どうやらjpegファイルがうまく作成できていなかったらしい
+
+調べた結果、以下の記事がヒット
+
+[https://stackoverflow.com/questions/3351967/prevent-ghostscript-from-writing-errors-to-standard-output](https://stackoverflow.com/questions/3351967/prevent-ghostscript-from-writing-errors-to-standard-output)
+
+どうやらghostscriptを実行した時に以下のようなコメントが標準出力として出力される
+
+> GPL Ghostscript 9.53.3 (2020-10-01)
+> Copyright (C) 2020 Artifex Software, Inc. All rights reserved.
+> This software is supplied under the GNU AGPLv3 and comes with NO WARRANTY:
+> see the file COPYING for details.
+> Processing pages 1 through 1.
+> Page 1
+
+そして実際に作成したjpegファイルも標準出力として出力される
+
+つまり、本来ファイルに必要なデータ以外にも上記のようなコメントが入り込んでjpegデータとして不正なものになってしまっていたらしい
+
+以下のようにコメントを標準エラーで出力するようにするとうまくいった
+
+```ts {2}
+const pdf2jpeg = spawn('gs', [
+  '-sstdout=%stderr',
+  '-sDEVICE=jpeg',
+  '-r300',
+  '-o',
+  `/tmp/temp_${firebaseStorageDownloadTokens}.jpeg`,
+  `/tmp/originFile_${firebaseStorageDownloadTokens}.pdf`,
+])
+```
+
+これをCloud Functionsにデプロイするとうまく動いてくれた…！
+めでたし、めでたし
+
+長かった。。。そしてGhostscriptのドキュメント読みにくいし検索もできなくてつらかった。。
+
+完成形のコードがこちら
+
+```ts
+import { spawn } from 'child_process'
+
+import { storage } from 'firebase-admin'
+import { v4 as uuidv4 } from 'uuid'
+
+export const createImgFromPdf: (name: string) => Promise<string> = async name => {
+  const thumbnailFile = storage()
+    .bucket()
+    .file(name.replace(/(\.[\w\d]+)$/i, `_1000x1000.jpeg`))
+  const firebaseStorageDownloadTokens = uuidv4()
+
+  const [originFile] = await storage().bucket().file(name).download()
+  await promises.writeFile(`/tmp/originFile_${firebaseStorageDownloadTokens}.pdf`, originFile)
+
+  await new Promise<void>((resolve, reject) => {
+    const test = spawn('gs', [
+      '-sstdout=%stderr',
+      '-sDEVICE=jpeg',
+      '-r300',
+      '-o',
+      `/tmp/temp_${firebaseStorageDownloadTokens}.jpeg`,
+      `/tmp/originFile_${firebaseStorageDownloadTokens}.pdf`,
+    ])
+    test.stderr.on('data', data => console.log(data.toString()))
+    test.on('close', () => resolve())
+    test.on('error', reject)
+  })
+
+  return new Promise((resolve, reject) => {
+    createReadStream(`/tmp/temp_${firebaseStorageDownloadTokens}.jpeg`)
+      .pipe(resizedFile.createWriteStream())
+      .once('error', reject)
+      .once('finish', async () => {
+        await thumbnailFile.setMetadata({
+          metadata: { firebaseStorageDownloadTokens },
+        })
+        resolve(
+          `https://firebasestorage.googleapis.com/v0/b/${
+            thumbnailFile.bucket.name
+          }/o/${encodeURIComponent(
+            thumbnailFile.name,
+          )}?alt=media&token=${firebaseStorageDownloadTokens}`,
+        )
+      })
+  })
+}
+```
+
+## リファクタリング
+
+無事、Cloud Functionsでデプロイして動いてくれるようになったのでよかったのだが先程のコードはより良くできる
+
+これまでに書いたコードの流れをおさらいすると以下のようになっていた
+
+**① まずstorageからpdfファイルをダウンロードしてファイルとして書き込む
+② pdfファイルからjpegファイルを作成する
+③ jpegファイルをstorageに格納し、そこへのpathを返り値として返す
+(関数を呼び出す場所でfirestoreのjpegファイルのpath情報をupdateする)**
+
+このコードだと処理のたびにダウンロードしたpdfファイルと作成したjpegファイルがフォルダ内に書き込まれていくことになる
+
+**実はストリームの標準入力と標準出力をうまく使えば一時ファイルに書き込むことなく一連の流れとしてこれらを処理することができるのでやってみる**
+
+考え方としては以下のような感じ
+(＊厳密には違うかもしれないが大まかな流れとしてはあってるはず。。)
+
+**①storageからpdfファイルをファイルの読み取りストリームで読み込み、ghostscriptで画像処理するプロセスの標準入力に流す
+②画像処理されたjpegファイルをghostscriptのプロセスの標準出力から受け取って、ファイルの書き込みストリームに渡してstorageへの書き込み処理をする**
+
+2つに分けた処理になっているが、実際に行われる処理はストリームで繋がっているため、一時ファイルを用意することなく一連の流れを処理することができるようになっている。
+工場での作業がラインで一本化したみたいな感じのイメージ
+
+実際のコードはこんな感じ
+
+```ts {12-16,19-22}
+import { spawn } from 'child_process'
+
+import { storage } from 'firebase-admin'
+import { v4 as uuidv4 } from 'uuid'
+
+export const createImgFromPdf: (name: string) => Promise<string> = async name => {
+  const thumbnailFile = storage()
+    .bucket()
+    .file(name.replace(/(\.[\w\d]+)$/i, `_1000x1000.jpeg`))
+  const firebaseStorageDownloadTokens = uuidv4()
+
+  const pdf2jpeg = spawn(
+    'gs -sstdout=%stderr -sDEVICE=jpeg -r300 -o - -',
+    { shell: true },
+  )
+  pdf2jpeg.stderr.on('data', data => console.log(data.toString()))
+
+  return new Promise((resolve, reject) => {
+    storage().bucket().file(name).createReadStream().pipe(pdf2jpeg.stdin)
+
+    pdf2jpeg.stdout
+      .pipe(thumbnailFile.createWriteStream())
+      .once('error', reject)
+      .once('finish', async () => {
+        await thumbnailFile.setMetadata({
+          metadata: { firebaseStorageDownloadTokens },
+        })
+        resolve(
+          `https://firebasestorage.googleapis.com/v0/b/${
+            thumbnailFile.bucket.name
+          }/o/${encodeURIComponent(
+            thumbnailFile.name,
+          )}?alt=media&token=${firebaseStorageDownloadTokens}`,
+        )
+      })
+  })
+}
+```
+
+元のコードと被っている部分も多いが、ハイライトした部分が変わったところ
+そしてそれによって/tmp配下に一時ファイルを置かなくて良くなってる
+
+まずこの部分について
+
+```ts
+const pdf2jpeg = spawn(
+  'gs -sstdout=%stderr -sDEVICE=jpeg -r300 -o - -',
+  { shell: true },
+)
+```
+
+先程まではspawnの第一引数にgsコマンド、第二引数にオプションを配列で渡していたが、その記述がガラッと変わった
+これはshell: trueとすることで、実際のコマンドを一気にshellのように書けるようになったから
+ただしこれは変数を当てはめる場合にはコマンドインジェクションの危険性があるから、単純な文字列の記述のみにすべきらしい
+
+そして本来読み込むファイルと書き込むファイルはファイルのpathを指定するが、ここでは`-`としている
+これはシェルに広くある文化だそうで、`-`とした場合は標準入力や標準出力を示すらしい
+よって入出力ファイルをストリームの標準入力、標準出力とすることで一連のパイプの中でデータをやり取りするようにし、一時ファイルを用意しなくて良いようにしている
+
+そのストリームでデータのやり取りをしている部分がこちら
+
+```ts
+storage().bucket().file(name).createReadStream().pipe(pdf2jpeg.stdin)
+
+pdf2jpeg.stdout
+  .pipe(thumbnailFile.createWriteStream())
+```
+
+storageからファイルを取得し、それをファイル読み取りのストリームで読み込んでいる
+そしてそれをパイプで接続してspawnの標準入力(`pdf2jpeg.stdin`)に渡している
+
+先程のコードでspawnを使って標準入力で受け取ったpdfファイルを標準出力に渡すようにしていた
+ここではそのプロセスの標準出力(`pdf2jpeg.stdout`)からデータを受け取り、それをパイプで接続してファイルの書き込みストリームに渡してstorageへの書き込み処理を行なっている
+
+これによってpdfファイルのダウンロードから変換処理、書き込み処理を一連のパイプの中で一貫してできるようになった
+
+本当は標準入力と標準出力の部分で記述が分かれている部分もduplexという読み取りも書き込みもできるストリームを使えば一続きでできるらしいが、今回はここまでで満足とする笑
+
+ちなみにghostscriptにはリサイズ機能がない？と思ったので、実際にはghostでjpegファイルを生成した後に最初のImageMagickで適切なサイズにリサイズするようにコマンドを繋げた
+
+```ts
+const pdf2jpeg = spawn(
+  'gs -sstdout=%stderr -sDEVICE=jpeg -r300 -o - - | convert -resize 1000x1000 jpeg:- jpeg:-',
+  { shell: true },
+)
+```
+
+gsとconvertをパイプの`|`で繋げて、convertの方でも同じくファイル部分を`-`で標準入力と標準出力にしている
+convertの場合は、`jpeg:`などとすることで拡張子のみを指定することができるらしい
+
+## まとめ
+
+Node.jsの組み込みモジュールは今まで全然知らなかったが便利なものが色々あった
+
+- child processは外部プロセスを扱うことができ、その標準入出力をストリームとして扱うことができる
+- fsはファイルの読み書きを扱うことができ、非同期処理もできる
+
+標準入力とか標準出力とかストリームとか、知識として知ってはいたけど実際に扱ったことはなかったからかなり勉強になった
+
+ファイルI/Oに関するあれこれを勉強できてとてもいい経験だった
+
+今回の実装だけでは不十分だったので続きは続編にて
+
+
+
+## 参考
+
+https://nodejs.org/api/child_process.html
+https://neos21.net/blog/2019/10/18-01.html
+https://nodejs.org/api/fs.html
+
+<EmbedLink url="https://qiita.com/masakura/items/5683e8e3e655bfda6756#streamduplex" />
