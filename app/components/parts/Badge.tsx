@@ -19,9 +19,9 @@ export const Badge = ({
       )}
     >
       {Icon && (
-        <div class="w-4 h-4">
+        <div class="w-4 h-4 grid place-items-center">
           {typeof Icon === "string" ? (
-            <span class="grid place-items-center text-sm">{Icon}</span>
+            <span class="leading-none text-sm">{Icon}</span>
           ) : (
             <Icon />
           )}
