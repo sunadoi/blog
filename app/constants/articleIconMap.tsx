@@ -6,6 +6,7 @@ import { FirebaseIcon } from "@/components/parts/icons/Firebase"
 import { FirestoreIcon } from "@/components/parts/icons/Firestore"
 import { GitIcon } from "@/components/parts/icons/Git"
 import { GitHubIcon } from "@/components/parts/icons/GitHub"
+import { GitHubActionsIcon } from "@/components/parts/icons/GitHubActions"
 import { GoIcon } from "@/components/parts/icons/Go"
 import { JavaScriptIcon } from "@/components/parts/icons/JavaScript"
 import { MySQLIcon } from "@/components/parts/icons/MySQL"
@@ -33,6 +34,7 @@ export type ArticleIconKey =
   | "Firebase"
   | "Firestore"
   | "GitHub"
+  | "GitHub Actions"
   | "Git"
   | "設計"
   | "DevOps"
@@ -57,6 +59,7 @@ export const ArticleIconMap = new Map<
   ["Firebase", FirebaseIcon],
   ["Firestore", FirestoreIcon],
   ["GitHub", GitHubIcon],
+  ["GitHub Actions", GitHubActionsIcon],
   ["Git", GitIcon],
   ["設計", "📐"],
   ["DevOps", "⚙️"],
