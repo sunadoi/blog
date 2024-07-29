@@ -1,0 +1,345 @@
+---
+title: playwrightとfirebase emulatorsでE2Eテストをする
+ogImageTitle: playwrightとfirebase emulatorsでE2Eテストをする
+description: playwrightとfirebase emulatorsでE2Eテストをする方法についてまとめる
+tags: Firebase,Playwright
+icon: Firebase
+publishedAt: 2022/07/19
+updatedAt: 2022/07/19
+---
+
+以前、firebase emulatorsを使ってロジックのユニットテストを実装した。
+
+<EmbedLink url="https://suna.dev/articles/vitest-firebase-emulators" />
+
+多少知見が溜まったので同じような構成でE2Eテストも導入してみた。
+導入にあたっていくつか考慮すべき事項があったのでそれをまとめておく。
+
+今回はplaywrightを使うことにしたが、代表的なツールであるcypressではなくこちらを選定した理由とかも最後にまとめておく。
+
+## playwrightとは
+
+Microsoftが開発しているOSSのテストツール。
+
+<EmbedLink url="https://github.com/microsoft/playwright" />
+
+執筆時の2022年7月現在は主にE2Eテストに使うことが多いと思うが、将来的にはコンポーネントテストもできるようになるっぽい。
+ちなみにcypressはviteを使ってコンポーネントテストができるようになった。
+
+<EmbedLink url="https://playwright.dev/docs/test-components" />
+
+E2Eテストツールはいくつかあるが、後発の利点とも言うべきか基本的にTypeScriptで書かれている。
+詳細な比較は後述するが、GitHubのスター数はいつの間にかcypressを抜いていた。
+
+実際書いてみたが、ドキュメントも豊富だしセットアップもしやすい。
+書き心地もいいし随所に開発者フレンドリーな印象を受けて非常に気に入った。
+
+## playwrightでE2Eテストを行う
+
+READMEに書いてある通りにインストールすれば使用できるようになる。
+
+```bash
+npm i -D @playwright/test
+# install supported browsers
+npx playwright install
+```
+
+必要なボイラープレートとかも基本的にはないので、`playwright.config.ts`を書いて後はテストを書けばよい。
+
+今回は`playwright`というディレクトリを設けて、E2Eテストはここに集約することにした。
+ロジックのユニットテストを`yarn vitest`で走らせるようにしているので、この時はE2Eテストだけ除外する必要がある。
+
+`vite.config.ts`に以下のように追記。
+
+```ts title="vite.config.ts"
+import { configDefaults } from 'vitest/config'
+
+export default defineConfig({
+  ...,
+  test: {
+    exclude: [...configDefaults.exclude, '**/playwright/**'],
+  },
+})
+```
+
+### playwright.config.ts
+
+設定ファイルを以下のように記述する。
+
+```ts title="playwright.config.ts"
+import path from 'path'
+
+import { devices } from '@playwright/test'
+import type { PlaywrightTestConfig } from '@playwright/test'
+import dotenv from 'dotenv'
+
+dotenv.config({ path: path.resolve(__dirname, './.env.test') })
+
+const config: PlaywrightTestConfig = {
+  timeout: 60000,
+  webServer: {
+    command: 'npx vite serve --port 8002 --mode test',
+    port: 8002,
+  },
+  use: {
+    headless: true,
+    viewport: { width: 1280, height: 720 },
+    baseURL: 'http://localhost:8002',
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+    },
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+    },
+  ],
+}
+
+export default config
+```
+
+環境変数の読み込みはこの設定ファイル内で行う。
+
+各設定項目は以下の通り。
+
+**timeout**
+デフォルトが30秒だが心もとないので一旦60秒にした
+
+**webServer**
+文字通り設定したコマンドでwebServerを起動してくれて好きなportで接続できるようにしてくれる。
+別プロセスでwebServerを起動しておいて接続するみたいな処理を自前で書く必要がなくなるので、個人的にはこれがめちゃくちゃ感動だった。
+
+**use**
+実際のテストの実行環境関連。baseURLを設定しておくと、テストファイル内ではルーティングだけ書けば良くなる。headlessはデバッグが必要な場合は随時falseにすると良さそう。
+
+**projects**
+どのブラウザ環境で実行するかを記述できる。chromium, firefox, webkitを記述しておくと、それぞれのテストケースごとにこの3つのブラウザを使ったテストを実行してくれる。
+勝手に並列で走らせてくれるので嬉しみ。
+
+今回は使用しなかったが、globalSetupやglobalTeardownというのもあって、全てのテストの前後処理を呼び出せる。
+
+### testファイル
+
+playwright以下に`*.test.ts`ファイルを用意して書くだけ。
+
+```ts title="playwright/sample.test.ts"
+import { test, expect } from '@playwright/test'
+import fetch from 'node-fetch'
+
+import { createUser } from '@/playwright/firebase'
+
+test.afterEach(async () => {
+  await Promise.all([
+    fetch(
+      `http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${process.env.GCLOUD_PROJECT}/databases/(default)/documents`,
+      { method: 'DELETE' },
+    ),
+    fetch(
+      `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/emulator/v1/projects/${process.env.GCLOUD_PROJECT}/accounts`,
+      { method: 'DELETE' },
+    ),
+  ])
+})
+
+test.describe('login', () => {
+  test('loginできる', async ({ page, browserName }) => {
+    const email = `user-${browserName}@example.com`
+    await createUser(email)
+
+    await page.goto('/signin')
+    // テストするのに必要な記述
+    await expect(page).toHaveURL('/mypage')
+  })
+})
+```
+
+ここではログインする処理を記載した。
+最初にログインするためのユーザー情報を作っている。
+`user-${browserName}`としているのは、このテストケースに対してクロスブラウザでテストが並列で走るのでそれぞれ別のデータを作るようにしておくことで作成、使用するデータが競合してしまうのを防いでいる。
+
+たったこれだけでテストが書けるようになるので本当に楽。
+実行は以下のnpm scriptsで行なっている。
+
+```json title="package.json"
+"playwright": "firebase emulators:exec --ui --project=foo --only auth,firestore 'npx playwright test src/playwright'"
+```
+
+## 導入する中で出てきた課題
+
+### データのクリーンアップ
+
+ロジックのユニットテストの時にやった方法は、各テストケースごとにデータを作成して終了時に`afterEach`でfirestoreとauthのデータをクリアする方法だった。
+
+同じことをE2Eテストでも行っている。
+ただ注意点が1つあって、`test.describe`が無いとエラーになってしまった。
+
+```ts title="playwright/sample.test.ts" {5}
+test.afterEach(async () => {
+  // firestoreとauthのクリーンアップ処理
+})
+
+test.describe("login", () => { // これが必要
+  test("login", async ({ page, browserName }) => {
+    // テスト処理
+  })
+})
+```
+
+`test.describe`自体はなくてもテストは可能だがafterEachのクリーンアップ処理が絡むと事情が変わってきた。
+どうやらクロスブラウザでテストを並列で走らせている場合、各ブラウザのテストが終わるごとにafterEachによるクリーンアップ処理が走ってしまうらしい。
+ドキュメントにそのような記載は見当たらなかったが、挙動を追跡した印象だとそうなっているように感じた。
+そのため、最初のテストケースはpassするが、残りのブラウザのテスト2つはデータがクリアされてる状態なので失敗するという事態に陥った。
+
+これを回避するために`test.describe`で囲ってクロスブラウザテストが終わった後にクリーンアップするようにした。
+
+ただこの実装後、そもそもafterEachでクリーンアップする方針自体見直した方がいいかもしれないなと思った。
+afterEachでクリーンアップする前提だと、他のテストへ影響を与えないために各テストを直列で走らせる必要がある。
+ユニットテストと違い、E2Eテストは比較的実行時間が長いので直列化した場合テスト時間がシーケンシャルに増加するのが課題になりそう。
+各テストケースでしか使われないデータを作成するようにして並列でテストして最後にまとめてクリーンアップする方針の方が良さそうな気がしたので、これは今後テストを増やしていく中で検討する。
+
+### webkitだけテスト落ちる問題
+
+テストの中である条件で入力を行なった時に、出てくるバリデーションが表示されてるかどうかをassertionする記述を書いたところ、webkitだけその表示が読み込めずにテストが落ちてしまった。
+
+直接的な原因は分かっていないがpauseしてデバッグしていくとちゃんと表示されているのが確認できた。
+表示までに時間がかかるのかと思い、待つ処理を挟むとうまくいった。
+
+```ts
+await page.locator('text=選択可能なのは最大3項目までです。').waitFor({ timeout: 1000 })
+await expect(page.locator('text=選択可能なのは最大3項目までです。').isVisible()).resolves.toBe(
+  true,
+)
+```
+
+plawrightで使ってるheadlessブラウザだけの問題なのか、実際のブラウザでもこの違いは反映されてるのか、、、真実はわからなかったがまあテストはpassするようになったのでよしとする
+
+ただ、CI上でwebkitだけ落ちてしまう
+どうやらubuntuのサポートがされてない？っぽい。今回はそこまでこだわりなかったのでwebkitでのテストは一旦走らせないことにした
+
+<EmbedLink url="https://github.com/microsoft/playwright/issues/13934" />
+
+### import.meta読み込めない問題
+
+実質、これはplaywright側の問題ではなくvite側の問題。
+
+setupとしてユーザーを作成する処理はプロダクションコードでも使用しているので、本来はその関数をそのままimportして使いたかった。
+しかし、その関数の依存関係の中にfirebaseの初期化処理があってそこでviteで環境変数を使うために`import.meta.env`を使用している。
+なのでplaywrightでその関数を呼び出すと`import.meta.env`を呼び出せずエラーになってしまう。
+
+仕方なくsetup関数を別途定義することで回避したが、これは正直どうにかしたい。
+プロダクションコードの方のsetup関数を変更することはあまりないかもしれないが、あった場合はこっちの関数の変更し忘れが発生するかもしれないし、そうでなくとも単純に記述が冗長になっているので。
+ただ現時点で解決策が見出せてないので、解決策わかる方いたら教えて欲しいです。
+
+ぱっと調べたら`import.meta.env`を`process.env`に変換するライブラリもあったがスター数がいまいち。。
+実際使ってみたけど上記問題は解決しなかった。
+
+よく分かってないがviteは環境変数の扱いを何でこうしたんだろう。
+ESMとして扱うから？
+ただ変換するライブラリはあるし、内容もシンプルそうだから`process.env`にすることもできたのではないのかな。
+その方が他のライブラリ使う際にすんなり読み取れるし便利な気がするのだが。
+これも、もしわかる方いたら教えてくれると嬉しいです。
+
+### workers
+
+クロスブラウザテストする際、ローカルだとブラウザの数だけworkersが走る
+ただ、CIにするとworkersが1になってたので、CIで走らせるコマンドの方だけ明示的に`--woerkers=3`として対応した
+
+## cypressとの比較
+
+playwrightとcypressを一通り使ってみて、個人的には圧倒的にplaywrightの方が好みだった。
+cypress初心者だから使いこなせてないだけという可能性はありつつ、以下ではcypressと比較した上でplaywrightの方がいいと思った部分を記述していく。
+
+### webサーバーの起動
+
+cypressではあらかじめwebサーバーを起動させておいた上で、テストを実行する必要がある。
+今回の場合、webサーバーとfirebase emulatorsを別プロセスで起動させておいた上でcypressを走らせる必要があるので、この辺の手順が多少煩雑になる。
+GitHub Actions上でやる際には `cypress-io/cypress-io/github-action@v2github-action@v2`なるものがあって、これのwait-onでサーバーの起動を待つ処理を書けば良さそうではあるのでそんなに問題はないのかもしれない。
+
+一方、playwrightはconfigにwebServerの設定をかけて、起動を待ってからテスト走らせるまでを面倒見てくれるのが非常に簡潔で嬉しい。
+以下のコマンドだけで済む。
+
+```bash
+firebase emulators:exec --ui --project=foo --only auth,firestore 'npx playwright test src/playwright'
+```
+
+ちなみにcypressだとこのfirebase emulators:execを使用する方法だと失敗したので、emulatorsもあらかじめ起動しておいてテストを実行する必要があった。
+原因ははっきり分かっていないので勘違いかもしれないが、emulatorsの環境が構築される前にテストが実行されて落ちているような挙動に感じた。この辺の制御に神経を使わなきゃいけないのが辛い。
+
+### async-await
+
+cypressはasync-awaitを使えないため、特定の処理を待ってから別の処理を行うみたいなことをしようとすると一工夫必要になる。
+基本的にタイムアウトを設定しておいて、それまでの間retryを繰り返すという方針らしい？
+
+playwrightの方が描き慣れた記述方法で書けるという印象。
+
+### クロスブラウザテスト
+
+cypressでも各種ブラウザによるテストは可能だが、`--broser chrome`みたいにテストしたいブラウザを設定していくスタイルだと認識している。(違ったらごめんなさい)
+なのでテストしたい数だけプロセスを走らせる必要がある。
+
+playwrightはprojectsに設定しておけば、各テストケースで勝手に並列実行してくれるのが便利。
+
+### テストコードの生成
+
+playwrightは`headless: false`にしてデバッグモードで起動するとブラウザが立ち上がる。
+この状態でRecordボタンを押して操作していくと、その操作通りのテストコードを自動生成してくれる。
+![](/assets/article/playwright-firebase-emulators/record.webp)
+
+長い一連の操作を記述する上で、これがめちゃくちゃ便利！
+そして思ってたよりも賢い。
+たとえば、路線一覧から駅名をチェックボックスで選択する部分のテストコードを生成した時、大体の駅は`text=渋谷`みたいな感じで生成されてたのに、目黒は`span:has-text("目黒")`のように生成されてた。
+
+```ts
+await page.locator('span:has-text("目黒")').click()
+await page.locator('text=恵比寿').click()
+await page.locator('text=渋谷').click()
+```
+
+これなんでなんだろうバグかなと思ってたんだけど、`text="目黒"`にするとエラーになってその意味がわかった。
+同じページ上に「東急目黒線」というボタンが存在していて、`text="目黒"`だとこっちの方もヒットしてしまう。
+つまり、目的のボタンをクリックしたことを一意に特定できるように勝手に変換してくれた上で生成してくれてた。
+
+賢すぎ。
+この辺どうやって要素を取得してくるかのベストプラクティスはちゃんと把握できてないのでもっといい方法あるかもしれないけど、基本的には落としてくれたものをそのまま使うで良さそうな気がしている。
+
+### 設定ファイル
+
+playwrightはplaywright.config.tsだけ書けば良い。
+
+cypressはcypress.config.tsの他にcypressディレクトリ配下にsupportなどがあって煩雑に感じた。
+あとv10でコンポーネントテストができるようになった影響で？、v9から結構変更があったように感じている。
+
+————————————-
+
+以上が個人的に触ってみた上での比較結果だが、個人的にはplawrightの方が好みだった。
+繰り返しになるがcypress初心者なので使いこなせてないだけの可能性は大いにある。
+
+逆にcypressはどういう時に使うのがいいのかなと考えてみた。
+ダッシュボードとかを提供してくれてるのでうまく活用すればチーム開発では便利なシーンがあるのかもしれない。
+あとスクリーンショットとかビデオとかの扱いもcypressの方が有利な気もしたがちゃんと検証してないのでこの辺は不明。
+
+コンポーネントテストも今はcypressしかできないけど、playwrightもexperimentalになってるのでそのうち使えるようになりそう。
+そうなると今度はコンポーネントテスト関連のツールとの違いはどうなるんだみたいなの出てきそうだが、その検証は機会があればやってみるということで。
+
+## まとめ
+
+playwrightは導入するだけなら比較的簡単だなと思った。
+firebase emulatorsとの接続もユニットテストで知見が溜まってたのですんなり導入できた印象。
+
+一方、ユニットテストと比較してそれなりに実行時間はかかる。
+どういうテストを行うべきかをちゃんと考えた上で実装していかないと、保守運用が大変になるのは容易に想像できた。
+
+初めてのE2Eテスト導入、なかなか楽しかった！
+
+## 参考
+
+<EmbedLink url="https://playwright.dev/docs/intro" />
+
+<EmbedLink url="https://docs.cypress.io/guides/overview/why-cypress" />

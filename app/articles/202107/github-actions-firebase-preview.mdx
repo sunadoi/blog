@@ -1,0 +1,158 @@
+---
+title: GitHub Actionsでfirebase preview channelを作成する
+ogImageTitle: GitHub Actionsで,firebase preview channelを作成する
+description: firebase preview channelを使ってPR作成時にpreview用のURLを作成する。それをGitHub ActionsでPRにコメントする方法を記載。
+tags: Firebase,GitHub Actions
+icon: Firebase
+publishedAt: 2021/07/04
+updatedAt: 2021/08/29
+---
+
+これまでフロントエンドのデプロイは主にAWSのAmplifyを使ってきたんだが、AmplifyはPR作成時にそのPRの内容を反映したpreview用のURLを勝手に作成してくれてた。
+
+これがあるとわざわざローカルに落としてこなくてもそのURLを使って動作確認できるから結構便利だった
+
+今はfirebaseのhostingを使っているのだが、デフォルトだとその機能はないらしい。
+
+調べたらpreview channelという機能があったのでそれを使うとできた。
+GitHub Actionsと組み合わせるととても便利になったのでまとめておく。
+
+## preview channelの作成と削除
+
+[公式ドキュメント](https://firebase.google.com/docs/hosting/manage-hosting-resources)にある通りだが、CLIを使って以下のように叩くととpreview channelを作成できる
+
+```bash
+firebase hosting:channel:deploy {CHANNEL_ID} --expires {h, d, w}
+```
+
+CHANNEL\_IDには自分の好きなIDを指定する
+firebase側でこのIDにランダム値を付与したものを使ってURLが作成される
+
+previewの有効期限は何も指定しなければデフォルトだと7日だが、`--expires`で指定することもできる。
+単位はh, d, w。
+
+有効期限が過ぎれば勝手に削除されるが、明示的に削除する時はdeployの部分をdeleteにすればok
+
+```bash
+firebase hosting:channel:delete {CHANNEL_ID}
+```
+
+## GitHub Actionsとの連携
+
+PR作成時にいちいちコマンドを叩くのはめんどいので、GitHub Actionsで勝手に作成してくれるようにしたい
+そしてそのPRを閉じた時にはそのpreviewを明示的に削除するようにしたい
+
+### PR作成時にpreview channelを作成する
+
+調べたら[公式](https://github.com/FirebaseExtended/action-hosting-deploy)が用意したものがあったのでこれを使うと簡単にできた
+
+```yaml title="deploy-preview.yml" {1,12-13,15}
+on: [pull_request]
+...
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      ...
+      - run: yarn build
+      - name: deploy preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_TEST }}'
+          projectId: test
+          channelId: '${{ github.event.number }}'
+```
+
+ビルドした後に公式が用意したコマンドを使うだけ
+
+GitHub側でコマンドを叩けるようにするために権限を付与する必要がある。
+まずは適切な権限を持ったservice accountのjsonを作成する。
+[公式が指定しているもの](https://github.com/FirebaseExtended/action-hosting-deploy/blob/main/docs/service-account.md)をGCP上で作成してGitHubのsecretsに適当な名前で保存しておき、これをfirebaseServiceAccountで指定する
+
+その他ポイントは3つ
+
+1. channelIdにPR番号(`github.event.number`)を使う
+2. トリガーにはpull\_requestを使う
+3. repoTokenにsecretsの`GITHUB_TOKEN`を使う
+
+#### 1. channelIdにPR番号を使う
+
+今回は作成したPRを閉じる時に明示的にそのpreviewを削除できるようにしたいので、作成時に指定するチャンネルIDと同じものを削除時に指定する必要がある。
+
+そのPRでユニークになるもの、かつ作成時に指定したものと同じものを削除時にも指定できるものということでPR番号が素直な解決策かなと思う
+
+#### 2. トリガーにはpull\_requestを使う
+
+単純なトリガーとして考えるとpushでもいいのだが、pushだと`github.event.number`でPR番号を取得できないので困る
+
+#### 3. repoTokenにsecretsの`GITHUB_TOKEN`を使う
+
+secretsの`GITHUB_TOKEN`は特に何も設定してなくても使える
+
+これによってPR内でGitHub Actionsのbotがpreview用のURLをコメントで提示してくれるようになる
+![previewのURLをPRコメントしているスクリーンショット](/assets/article/github-actions-firebase-preview/pr-comment.webp)
+
+内容を修正して新しくcommitをpushすると、previewのURLは変更せずに最新のcommit内容を反映したものに変えてくれる(updated for commitが変わる)
+
+コメントが何個も作成されるわけではなく、その都度最初に作られた上記画像のようなコメントの内容が書き換えられるのでとても便利。
+
+### PR削除時に該当のpreview channelを削除する
+
+PRをマージした時やcloseした時には明示的にpreview channelを削除したい
+
+これは別のymlファイルで以下のように設定する
+
+```yaml title="delete-preview.yml" {3,14}
+on:
+  pull_request:
+    types: [closed]
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+      - run: npm install -g firebase-tools
+      - name: delete preview
+        run: firebase hosting:channel:delete ${{ github.event.number }} --project=${{ env.PROJECT_ID }} -f
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN_TEST }}
+          PROJECT_ID: test
+```
+
+ポイントは以下の3つ
+
+1. トリガーをpull\_requestのclosedのみにしておく
+2. deleteで指定するチャンネルIDは作成時と同じようにPR番号を指定する
+3. `FIREBASE_TOKEN`を環境変数として指定しておく
+
+最初の2つは省略
+
+CIでfirebaseコマンドを使用する必要があるが、`FIREBASE_TOKEN`を環境変数として指定しておくと、firebase側でこのトークンを勝手に使用してくれるので設定しておく
+
+
+https://firebase.google.com/docs/cli?hl=ja#cli-ci-systems
+
+PR作成時に触れなかったがprojectIdを指定していたので、ここでも`--project`で指定する
+このオプションはpreview channelのオプションではなくfirebaseのCLIのオプション
+
+これでPR作成時にpreview channel作成、PRのclose時に削除という一連の流れを構築できた
+
+## おわりに
+
+Amplifyと違って色々作成しなければならないので手間はかかったが、おかげでGitHub Actionsの仕様とかを色々知ることができてよかった
+
+これを設定すると何がいいかって、わざわざローカルにブランチをpullしてこなくても動作確認できるようになる
+
+業務ではエンジニアではないPMの人とかにもPR内容を確認してもらうことがあるので、そういう場合にPR内容を反映したURLを作成するというのは大きな意味があると思って実装した
+
+スマホの実機で確認したい時とかにもこのURLを使って確認できるのでとても便利
+
+## 参考
+
+https://firebase.google.com/docs/hosting/manage-hosting-resources
+
+<EmbedLink url="https://github.com/FirebaseExtended/action-hosting-deploy" />

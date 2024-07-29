@@ -13,8 +13,8 @@ export const FirebaseIcon = () => {
         <filter
           x="-50%"
           y="-50%"
-          width="200%"
-          height="200%"
+          width="100%"
+          height="100%"
           filterUnits="objectBoundingBox"
           id="b"
         >
@@ -40,8 +40,8 @@ export const FirebaseIcon = () => {
         <filter
           x="-50%"
           y="-50%"
-          width="200%"
-          height="200%"
+          width="100%"
+          height="100%"
           filterUnits="objectBoundingBox"
           id="d"
         >

@@ -1,0 +1,219 @@
+---
+title: vitestとfirebase emulatorsでロジックのユニットテストをする
+ogImageTitle: vitestとfirebase emulatorsでロジックのユニットテストをする
+description: vitestとfirebase emulatorsを使って、ロジックのユニットテストをする方法をまとめる
+tags: Firebase,Vitest
+icon: Firebase
+publishedAt: 2022/06/29
+updatedAt: 2022/06/29
+---
+
+フロントのロジックのユニットテストをするにあたって、多くの関数がfirestoreと結合しておりそのままではテストができない状態だった。
+全てをmock化して行うのも大変だし、firestoreとのやりとりがメインの関数も多いのでそうして書かれたテストはさほど意味がなくなってしまう。
+
+そこでローカルでfirebase emulatorsを立ち上げて、テストの際はそこに接続することで実際の動作を伴ったテストを書いた。
+
+今のところうまくテストが書けているのと、その形に落ち着くまでに色々調査して試したことがあるのでその辺をまとめておく。
+firestoreを使用したテストの事例はsecurity-rulesのテストはあれど、ロジックのユニットテストは調べてもほぼ見当たらなかった。
+これが本来あるべきテスト手法なのかは分からないが、実際の挙動を模倣した上でわりと高速に動作しているので一定意味のあることだと認識している。
+
+以下ではviteとemulatorsの設定は既にされている前提で話を進める。
+
+<Message>
+firebase: 9.8.2,
+vitest: 0.13.1
+</Message>
+
+## emulatorsを起動させた上でテストを起動させる
+
+firebaseの公式ドキュメントにこんな表記がある。
+
+> If you want to run a test suite or testing script after the emulators have started, use the `emulators:exec` command:
+> *https://firebase.google.com/docs/functions/local-emulator#run\_the\_emulator\_suite*
+
+```bash
+firebase emulators:exec "./my-test.sh"
+```
+
+`firebase emulators:exec`をした上で実行したいコマンドを書けばよさそう。
+なのでnpm scriptsにこんな感じの記載をすればよい。
+
+```json title="package.json"
+"test": "firebase emulators:exec --ui --project=xxx --only auth,firestore 'yarn vitest'"
+```
+
+実際にフロントでテストに使うのはemulatorsの中のauthとfirestoreだけなので不要なものを使わないように`--only`で指定している。
+`--project`はプロジェクトが複数ある場合は指定が必要。
+`--ui`としておくと、ローカルでemulatorsの内容がUIとして確認できるようになるのでテストによってどんな内容になってるかを確認するのに便利。CI上では使わないのでこの記述を削除すれば良い。
+
+## テストを書く
+
+一旦firebase関係なく適当な関数のテストを書いてみる。
+
+```ts
+import { test, expect } from 'vitest'
+
+const add = (a: number, b: number) => {
+  return a + b
+}
+
+test('1 + 2', () => {
+  expect(add(1, 2)).toBe(3)
+})
+```
+
+vitestではjestではグローバルに使えていたtestだったりexpectも明示的にimportする必要がある。
+次に実際にプロダクションコードで使用している関数をテストしてみる。
+
+ここでは単純にfirestoreのusersコレクションにあるドキュメントをupdateするだけの`updateUser`関数をテストすることを想定する。
+
+```ts title="user.test.ts"
+import { faker } from '@faker-js/faker'
+import { describe, test, expect, vi } from 'vitest'
+
+import * as userFn from "./user"
+
+const setupUser = async () => {
+  return await userFn.createUser(
+    faker.internet.exampleEmail(),
+    faker.internet.password(8),
+  )
+}
+
+describe(userFn.updateUser.name, () => {
+  test('ユーザー情報がupdateされている', async () => {
+    const user = await setupUser()
+    await userFn.updateUser(user.id, { name: "updatedName" })
+    const updatedUser = await userFn.fetchUser(user.id)
+
+    expect(user.name).not.toBe("updatedName")
+    expect(updatedUser.name).toBe("updatedName")
+  })
+})
+```
+
+updateの関数をテストするには当然updateする対象のデータが存在している必要があるため、最初に`setupUser`関数で`createUser`関数を使ってデータをfirestoreに入れている。
+
+その後のテストでこのuserのidを使いたいので関数として呼び出して返り値を受け取っている。
+(本当はbeforeEachとか使って初期データ突っ込みたかったが、返り値が必要なのでこういう実装に落ち着いた。)
+
+`updateUser`関数を呼び出した後、`fetchUser`関数を使ってuser情報を取得し、update前とupdate後でそれぞれassertionしている。
+
+上記テストを書いてテストのスクリプトを実行すれば実際にfirestoreのemulators上でデータが作られたり更新されてテストが行われる。
+これで無事テストが通ればひとまずok。
+
+## テスト実行ごとにfirestoreのデータをクリアする
+
+firestoreのemulatorsを使ってテストは書けるようになったが、このままだとテストを実行するたびにfirestoreのデータが増えていく。
+
+それぞれのテスト間で影響がなければ問題ないかもしれないが、既存のデータに依存するような処理があるとテスト結果が安定しなくなるので、やはりテストごとにデータをクリアするべき。
+
+firestoreのデータを全部クリアするみたいなメソッドはないと思っていたが、emulators環境だけで使えるHTTPメソッドがあるらしい。
+
+> In an appropriate method, perform an HTTP DELETE operation, supplying your Firebase projectID, for example firestore-emulator-example, to the following endpoint:
+> *[https://firebase.google.com/docs/emulator-suite/connect\_firestore#clear\_your\_database\_between\_tests](https://firebase.google.com/docs/emulator-suite/connect_firestore#clear_your_database_between_tests)*
+
+```bash
+"http://localhost:8080/emulator/v1/projects/firestore-emulator-example/databases/(default)/documents"
+```
+
+各テストが終わるごとにデータをクリアすれば良さそうなので、afterEachでこのメソッドをDELETEで呼び出せば良さそう。
+firestoreだけじゃなくauthのデータもクリアする必要があったのでそちらのメソッドも呼び出す。
+これらを反映したのが以下のコード。
+
+```ts title="user.test.ts" {7-18}#add
+import { faker } from '@faker-js/faker'
+import { describe, test, expect, vi } from 'vitest'
+import fetch from 'node-fetch'
+
+import * as userFn from "./user"
+
+afterEach(async () => {
+  await Promise.all([
+    fetch(
+      `http://${process.env.FIRESTORE_EMULATOR_HOST}/emulator/v1/projects/${process.env.GCLOUD_PROJECT}/databases/(default)/documents`,
+      { method: 'DELETE' },
+    ),
+    fetch(
+      `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/emulator/v1/projects/${process.env.GCLOUD_PROJECT}/accounts`,
+      { method: 'DELETE' },
+    ),
+  ])
+})
+
+const setupUser = async () => {
+  return await userFn.createUser(
+    faker.internet.exampleEmail(),
+    faker.internet.password(8),
+  )
+}
+
+describe(userFn.updateUser.name, () => {
+  test('ユーザー情報がupdateされている', async () => {
+    const user = await setupUser()
+    await userFn.updateUser(user.id, { name: "updatedName" })
+    const updatedUser = await userFn.fetchUser(user.id)
+
+    expect(user.name).not.toBe("updatedName")
+    expect(updatedUser.name).toBe("updatedName")
+  })
+})
+```
+
+これでテストごとにfirestoreとauthのデータがクリアされる。
+実際にemulatorsのUIを見てもその様子が確認できた。
+
+## mock化
+
+単純な関数であればこれでよいのだが、中にはテストの時には関数の中の一部分をmock化したかったりする。
+
+mock化の方法は`mock`と`spyOn`の2種類あるという認識。
+[](https://vitest.dev/guide/mocking.html#mocking)[https://vitest.dev/guide/mocking.html#mocking](https://vitest.dev/guide/mocking.html#mocking)
+
+この辺はvitestというかjestの設定をそのまま引き継いでいそう。
+
+2つの違いは色々ありそうだが、`spyOn`は、引数がオブジェクトなのに対し、`mock`は引数がモジュールのpath。
+
+analytics関連のライブラリのメソッドだったり明らかにテストする時に不要なものは`mock`を使ってしまえば良さそう。
+サードパーティ製のライブラリ丸ごとmock化とかできて便利。
+ちなみに`vi.mock`はファイルのトップレベルで巻き上げられるからどこに書いても同じになるらしい。
+
+mock呼び出すごとに返す値変えたり呼ばれた回数カウントしたりとかは`spyOn`の方がしやすそうなので、ライブラリ丸ごとmock化したいとかじゃなければ、基本はこっち使うでいいのかなと思っている。
+
+あとテスト間でmockの内容をちゃんとクリアする必要がある。
+
+`clearMocks`、`mockReset`、`restoreMocks`の3種類あるみたい。
+(mockのprefixとsuffixがぶれてるのが若干モヤる。)
+[https://vitest.dev/config/#clearmocks](https://vitest.dev/config/#clearmocks)
+
+それぞれのallバージョンも用意されている。
+雑にafterEachの中で`clearAllMocks`を呼ぶでもいい気がしているんだけどダメなんだろうか。
+`clear`では不十分で`reset`したり`restore`したりしないといけないケースがいまいち把握できていない。
+
+mock化の使い分けだったり、クリアの仕方だったりはまだベストプラクティスがよくわかっていないので、これからやりながら知見をためていく予定。
+
+## テストの並列化
+
+そもそも各テストごとに実行時の環境を用意すればわざわざfirestoreのデータを初期化する必要もない。
+
+もともとはテストごとにemulatorsの環境用意してテストを走らせようと思ったが、そうするとその分だけportを用意する必要があり、各テストは別々のportに接続する必要が出てきて現実的な案とは言えなさそうだったので直列でテストを実行する代わりにデータをクリアするという方針に落ち着いた。
+
+その場合、処理速度がどうなるかが懸念点だったが今の所全く問題ないのでこの方針の方がシンプルで良かったと思っている。
+
+## まとめ
+
+TSでまともにテストを書く体験自体が初めてだったのでわからないことだらけだったが、なんとかfirestore使ったテストが実行できる環境が整えられて非常に満足感あった。
+
+重要な部分をmock化しない形で書けたのである程度意味のあるテストの形になっていると思う。
+
+にしてもvitest、firestoreとの接続を含むテストが20個くらいあるのに、watchモードで修正加えるとtotalの実行時間が1.5sくらいで評価してくれるの本当爆速で開発体験がとても良い。
+
+とりあえずロジックのテストをこれでやって、知見が溜まってきたらE2Eテストもfirebaseのemulators使ってやっていきたいなと思ってる。
+
+## 参考
+
+https://firebase.google.com/docs/emulator-suite/connect_firestore#clear_your_database_between_tests
+
+<EmbedLink url="https://vitest.dev/guide/mocking.html" />
+
+<EmbedLink url="https://qiita.com/m-yo-biz/items/e9b6298d111ff6d03a5e" />
