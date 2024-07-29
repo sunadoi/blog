@@ -1,0 +1,201 @@
+---
+title: オブジェクトのキーの配列を過不足なく型チェックする
+ogImageTitle: オブジェクトのキーの配列を,過不足なく型チェックする
+description: オブジェクトのキー一覧を配列として扱う際に、全てのキーが過不足なく配列の中の要素として存在するかどうかをTypeScriptの型でチェックする仕組みを記載。
+tags: TypeScript
+icon: TypeScript
+publishedAt: 2021/11/06
+updatedAt: 2022/11/22
+---
+
+オブジェクトのキー一覧を配列として扱いたい時に、全てのキーが過不足なく配列の中に格納できているかどうかを型チェックする仕組みが欲しかった。コードで書くとこんなことがしたかった
+
+```ts
+type Foo = {
+  foo: string
+  bar: number
+  baz?: boolean
+}
+
+// Fooの型にあるbazが配列の中に入っていない場合はエラーになって欲しい
+const fooKeys: SomeType = ['foo', 'bar']
+```
+
+これができるような型システムを自作したのでまとめておく
+
+## 背景
+
+オブジェクトのキー一覧を配列として扱う時にそれらのキーを配列にしたかった。オプショナルのキーも含めて配列に入れたい
+
+```ts
+type Foo = {
+  foo: string
+  bar: number
+  baz?: boolean
+}
+
+const fooKeys = ['foo', 'bar', 'baz']
+```
+
+単純に上記のように書けばいい
+**ただ、Fooに新しくプロパティを追加した時にfooKeysにも追加しなければいけないけど、そのままだと追加し忘れる可能性がある**
+
+なので過不足ない配列にしたくて、変なものが混ざってたり必要なものが不足してたりしたらエラーを出すようにしたかった。
+そうすれば追加し忘れていたらCIで落ちるので追加し忘れを防げる
+
+```ts
+const fooKeys = ['foo', 'bar', 'baz', 'aaa'] // aaaはないのでエラーになって欲しい
+const fooKeys = ['foo', 'bar'] // bazが不足しているのでエラーになって欲しい
+```
+
+## Object.keysを使ってみる
+
+適当なオブジェクトを定義して`Object.keys`とすればkeyを取れるからそれでいける？
+と思ったけど`Object.keys`では`string[]`になるのでこの方法はダメだった
+
+```ts
+const foo: Required<Foo> = {
+  foo: "",
+  bar: 0,
+  baz: false,
+}
+
+// Object.keysはstring[]になってしまうのでエラーになる
+const fooKeys: keyof Foo = Object.keys(foo)
+```
+
+## 型アノテーションを使ってみる
+
+ぱっと思いついた方法だと以下の通り
+
+```ts
+const foo: (keyof Foo)[] = [
+  "foo",
+  "bar",
+  "baz",
+]
+```
+
+ただこれだと、Fooに存在しないキーを含めるとエラーになってくれるが、本来存在するはずの`bar`や`baz`が配列の中に入っていなかったとしてもエラーになってくれない
+(`keyof Foo`はユニオン型なのでそれを満たしてさえいればエラーにならない)
+
+```ts
+// これはエラーになる
+const foo: (keyof Foo)[] = [
+  "foo",
+  "bar",
+  "qux", // 存在しないキー
+]
+
+// "baz"がないけどこれはエラーにならない
+const foo: (keyof Foo)[] = [
+  "foo",
+  "bar",
+]
+```
+
+そうすると結局Fooに新しくプロパティを追加した時にこのコードに追加漏れが発生する可能性があった
+
+どうもサクッとできなさそう…
+最近TypeScriptの型について色々深く勉強したのでせっかくなのでそれを活かそうと思い、ちゃんと型チェックをしてエラー検知をする仕組みを自作することにした
+
+(オブジェクトのキーをタプルの型にしてアノテーションする方法も一応できたんだけど、キーの数の順列数のユニオン型のタプルを計算することになってしまって、計算量が膨大になったので却下した)
+
+## キーのユニオン型を比較する
+
+アプローチを変えて定義した配列をユニオン型にしてそれが`keyof Foo`と一致するかどうかを確認することにした
+
+まず、配列を定義する。この時に`as const`を使ってタプル型にする。
+そうしないとfooKeysが`string[]`になってしまうので
+
+```ts
+// fooKeys: readonly ["foo", "bar", "baz"]になる
+const fooKeys = ["foo", "bar", "baz"] as const
+```
+
+これをユニオン型にするために以下のようにする。
+
+```ts
+// "foo" | "bar" | "baz"
+type TypeFooKeys = typeof fooKeys[number]
+```
+
+次にこれが`keyof Foo`と一致するかどうかを確認して、一致しない場合はエラーになるようにしたい
+
+まず一致するかどうかを確認するための道具が必要
+詳細はリンク先参照だがこうすればできる
+
+```ts
+type Equals<X, Y> =
+  (<T>() => T extends X ? 1 : 2) extends
+  (<T>() => T extends Y ? 1 : 2) ? true : false;
+```
+
+<EmbedLink url="https://github.com/microsoft/TypeScript/issues/27024#issuecomment-421529650" />
+
+んーよくこんなの思いつくなーすごい。笑
+`Equals`に食わせた2つの型パラメータが一致していればtrueを返すし、一致していなければfalseを返す
+
+ありがたくこれを使わせてもらうとして、あとは上記の`Equals`の結果がfalseの場合のみ型チェックでエラーになるようにすればよいので、以下のような型を作る
+
+```ts
+type Expect<T extends true> = T
+```
+
+`Expect`はtrueしか受け取らない。
+これを`Equals`と組み合わせて使うことで`Equals`に食わせた2つの型パラメータが異なる時はfalseとなり、Expectのところでタイプエラーが出るようになったので、これでCIで検知することができるようになった
+
+全てを合わせると以下のようになる
+
+```ts
+const fooKeys = ["foo", "bar", "baz"] as const
+
+type TypeCheckFooKeys = Expect<
+  Equal<typeof fooKeys[number], keyof Foo>
+>
+```
+
+この状態で例えば`Foo`に別のプロパティを追加してみるとエラーになる
+
+```ts {5,12}
+type Foo {
+  foo: string
+  bar: number
+  baz?: boolean
+  qux: string // 追加！
+}
+
+const fooKeys = ["foo", "bar", "baz"] as const
+
+// fooKeys[number]: "foo" | "bar" | "baz"
+// keyof Foo: "foo" | "bar" | "baz" | "quz"
+// EqualがfalseになるのでExpectがfalseを受け取るようになってエラーになる
+type TypeCheckFooKeys = Expect<
+  Equal<typeof fooKeys[number], keyof Foo>>
+>
+```
+
+この`TypeCheckFooKeys`自体はどこかで使うわけではないのでTSが定義したのに使ってないぞってエラー出すけど、これはignoreする記述書くか、exportしてしまえばok
+ただ置いておくだけでチェックしてくれるようになった
+
+オブジェクトの一部のキーは不要とかの場合は`keyof Foo`から不要なプロパティだけExcludeしてやればok
+
+```ts
+const fooKeys = ["foo", "baz"] as const
+
+type TypeCheckFooKeys = Expect<
+  Equal<typeof fooKeys[number], Exclude<keyof Foo, "bar">>
+>
+```
+
+## まとめ
+
+もっといい方法があるかもしれないが今回は必要な機能を自作できたので満足
+
+最近TSの型パズルにハマっているのでどうすれば必要な型を得られるかなーと考えて作るのが楽しい
+
+TSは本当に表現力豊かだなあと思う
+
+## 参考
+
+<EmbedLink url="https://github.com/microsoft/TypeScript/issues/27024#issuecomment-421529650" />
