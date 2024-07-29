@@ -16,6 +16,7 @@ import { NodeJSIcon } from "@/components/parts/icons/NodeJS"
 import { PrismaIcon } from "@/components/parts/icons/Prisma"
 import { ReactIcon } from "@/components/parts/icons/React"
 import { TypeScriptIcon } from "@/components/parts/icons/TypeScript"
+import { VitestIcon } from "@/components/parts/icons/Vitest"
 import type { JSX } from "hono/jsx/jsx-runtime"
 
 export type ArticleIconKey =
@@ -27,6 +28,7 @@ export type ArticleIconKey =
   | "Node.js"
   | "prisma"
   | "ESLint"
+  | "Vitest"
   | "Go"
   | "MySQL"
   | "Docker"
@@ -52,6 +54,7 @@ export const ArticleIconMap = new Map<
   ["Node.js", NodeJSIcon],
   ["prisma", PrismaIcon],
   ["ESLint", ESLintIcon],
+  ["Vitest", VitestIcon],
   ["Go", GoIcon],
   ["MySQL", MySQLIcon],
   ["Docker", DockerIcon],
