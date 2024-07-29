@@ -1,0 +1,106 @@
+---
+title: type predicateでFirebaseのエラーハンドリングをする
+ogImageTitle: type predicateで,Firebaseのエラーハンドリングをする
+description: firebaseのエラーをtype predicateで型安全に行う方法。
+tags: TypeScript,Firebase
+icon: TypeScript
+publishedAt: 2021/09/22
+updatedAt: 2021/09/22
+---
+
+前回type predicate使う場面が出てきてテンション上がって記事を書いた
+
+<EmbedLink url="https://suna.dev/articles/type-predicate" />
+
+その直後にもう一つtype predicate使う場面が出てきたのでメモ
+
+TSのバージョンを4.4に上げた時にエラーになる部分が出てきたのでそれに対応するために使用した
+
+## 背景
+
+TSを4.4にアップデートしたらエラー吐くようになった
+内容見たらcatchの中のerrorオブジェクトが今までanyに推論されてたのがstrict: trueだとunknownに推論されるようになったらしい。
+
+<EmbedLink url="https://www.typescriptlang.org/docs/handbook/release-notes/typescript-4-4.html#using-unknown-in-catch-variables" />
+
+エラーハンドリングで`error.message`とかやってたのがerrorがunknownになったことで怒られるようになった
+
+```ts
+try {
+  ...
+} catch (error) {
+  console.error(error.message) // エラー
+  ...
+}
+```
+
+## narrowingによる対応
+
+解決策としては下記のようにnarrowingしてやればok
+errorはErrorオブジェクトであることを教えてあげればmessageプロパティが使える形になる
+
+```ts
+try {
+  ...
+} catch (error) {
+  if (error instanceof Error) console.error(error.message)
+  ...
+}
+```
+
+基本これでokなんだけど、一箇所firebaseのエラーハンドリングの部分だけ困った
+
+```ts
+try {
+  ...
+} catch (error) {
+    if (error.code === 'auth/account-exists-with-different-credential') {
+      // エラーハンドリング
+    }
+}
+```
+
+元々これは[firebaseのドキュメントにも書いてある書き方](https://firebase.google.cn/docs/auth/web/facebook-login?hl=ja#expandable-1)なんだけど、Errorオブジェクトにはcodeプロパティがないので、他の部分と同じように`instanceof Error`とするだけじゃだめだった
+
+## type predicateを使う
+
+narrowingでerrorオブジェクトがcodeというプロパティを持つことを示したい
+そんな時に使えるのがぼくらのtype predicate
+
+以下のようにすると行けた
+
+```ts
+type FirebaseError = {
+  code: string
+  message: string
+  name: string
+}
+
+const isFirebaseError = (e: Error): e is FirebaseError => {
+  return 'code' in e && 'message' in e
+}
+
+try {
+  ...
+} catch (error) {
+    if (
+      error instanceof Error &&
+      isFirebaseError(error) &&
+      error.code === 'auth/account-exists-with-different-credential'
+    ) {
+      // エラーハンドリング
+    }
+}
+```
+
+Firebaseから型がexportされてるか分からなかったので、codeを持つ型を自分で定義してtype predicateしてやればerrorがFirebaseErrorに推論されるので`error.code`が通るようになった
+
+type predicateの使い方完全に理解した！！
+
+## まとめ
+
+TSおもしれー！！！(2回目)
+
+## 参考
+
+<EmbedLink url="https://www.typescriptlang.org/docs/handbook/release-notes/typescript-4-4.html#using-unknown-in-catch-variables" />
