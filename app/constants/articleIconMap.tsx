@@ -13,6 +13,7 @@ import { MySQLIcon } from "@/components/parts/icons/MySQL"
 import { NestJSIcon } from "@/components/parts/icons/NestJS"
 import { NextJSIcon } from "@/components/parts/icons/NextJS"
 import { NodeJSIcon } from "@/components/parts/icons/NodeJS"
+import { PlaywrightIcon } from "@/components/parts/icons/Playwright"
 import { PrismaIcon } from "@/components/parts/icons/Prisma"
 import { ReactIcon } from "@/components/parts/icons/React"
 import { TypeScriptIcon } from "@/components/parts/icons/TypeScript"
@@ -29,6 +30,7 @@ export type ArticleIconKey =
   | "prisma"
   | "ESLint"
   | "Vitest"
+  | "Playwright"
   | "Go"
   | "MySQL"
   | "Docker"
@@ -55,6 +57,7 @@ export const ArticleIconMap = new Map<
   ["prisma", PrismaIcon],
   ["ESLint", ESLintIcon],
   ["Vitest", VitestIcon],
+  ["Playwright", PlaywrightIcon],
   ["Go", GoIcon],
   ["MySQL", MySQLIcon],
   ["Docker", DockerIcon],
