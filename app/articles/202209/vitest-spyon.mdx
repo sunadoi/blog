@@ -1,0 +1,120 @@
+---
+title: vitestで関数内で呼んでいる同じファイル内の関数をmockする
+ogImageTitle: vitestで,関数内で呼んでいる,同じファイル内の関数をmockする
+description: vitestでテストを書いていて、mock化がうまくされないケースに遭遇した時の対処法を記載。
+tags: Vitest,TypeScript
+icon: Vitest
+publishedAt: 2022/09/30
+updatedAt: 2022/09/30
+---
+
+vitestでテストを書いていて、mock化がうまくされないケースに遭遇した。
+mock化自体は他の場所でもやっていたので、書き方は間違ってないはずなのだがなぜだかmock化されない。
+
+動作を細かく調べてみると、ある関数内で呼び出している別の関数が同じファイル内にある場合だけmock化がされなかった。
+何が起こっているかという現象と対策を調べたのでまとめておく。
+
+原因を調査して一旦納得したものの、同じことをvitestではなくjestでやると問題なく動作することがわかった。
+どうやらjestとvitestの問題というよりはESMかどうかでファイルの読み込み方が違うことによってmock時の挙動が変わるという方が正しそう？
+この辺は分かり次第追記する。
+
+## 実際に起きたこと
+
+まず実際に起こったことを簡略化したコードを使って説明する。
+`module.ts`なるファイルがあったとして、`foo`と`bar`という2つの関数があり、`bar`の中で`foo`を呼び出している。
+
+```ts title="module.ts"
+export const fooFn = (str: string) => {
+  return str
+}
+
+export const barFn = () => {
+  return fooFn("foo")
+}
+```
+
+この時`barFn`関数をテストしたいとする。
+ただし、`fooFn`関数の結果はmock化したものを使いたいとする。
+ということでこう書いてみた。
+
+```ts title="module.test.ts"
+import { vi } from "vitest"
+import * as moduleFns from "./module"
+
+test('bar', () => {
+    vi.spyOn(moduleFns, 'fooFn').mockReturnValue("mockedFoo")
+    const result = moduleFns.barFn()
+
+    expect(result).toBe("mockedFoo")
+})
+
+```
+
+`spyOn`を使って`fooFn`関数をmock化したので`mockedFoo`が返ってくることを期待したが、実際には`foo`が返ってきた。
+
+## 原因の分析
+
+最初何が起こったのかわからず、まずmock化できているかどうかを調べてみた。
+
+```ts title="module.test.ts" {6}
+import { vi } from "vitest"
+import * as moduleFns from "./module"
+
+test('bar', () => {
+    vi.spyOn(moduleFns, 'fooFn').mockReturnValue("mockedFoo")
+    console.log(moduleFns.fooFn("foo")) // mockedFoo
+    const result = moduleFns.barFn()
+
+    expect(result).toBe("mockedFoo")
+})
+```
+
+mock化した後に`console.log`で出力してみるとちゃんと`mockedFoo`が返ってきている。
+つまりmock化はできているのに`barFn`から呼び出した時だけmock化された結果が使われていない。
+
+別のファイルの関数をmock化した時は意図した通りにmock化できていたことを考えると、同じファイルの時のみmock化されたものが使われていないということになる。
+
+ここまで考えたところで参照が違うということかなと思って調べてみたらやっぱりそういうことらしかった。
+
+<EmbedLink url="https://stackoverflow.com/questions/45111198/how-to-mock-functions-in-the-same-module-using-jest" />
+
+## 対応策
+
+参照が違うというのが原因なので参照が同じになる様に修正する必要がある。
+
+調べた感じだと`exports`を使う方法と、自分自身をimportする方法の2つっぽい。
+
+```ts
+// 案1
+export const barFn = () => {
+  return exports.fooFn("foo")
+}
+
+// 案2
+import * as self from "./module"
+
+export const barFn = () => {
+  return self.fooFn("foo")
+}
+```
+
+`exports`は`module.exports`と同じもの。
+
+どちらがいいのかということだが、型安全性を考慮して案2を採用した。
+案1だと`exports.fooFn()`の型がanyになってしまってた一方、案2だとちゃんと推論が適切に効いていた。
+案2だと循環参照になってしまうのが気になるが、ES6がいい感じに処理してくれてるので特に問題はなさそうに思えたのでこちらを採用。
+
+いずれにせよプロダクションコードをテストのために書き換えないといけないのがモヤるが、調べたところ解決策なさそうなので妥協する。
+何かいい解決方法知ってる人いたら教えてください。
+
+jestだとこの現象は起こらなかった。
+おそらくESMのファイル読み込みが関連してそうだが、分かり次第追記する。
+
+## まとめ
+
+不可解な現象に遭遇して最初意味がわからなかった。
+色々調べる前にデバッグして原因を当たりをつけられたのはよかった。
+
+## 参考
+
+<EmbedLink url="https://stackoverflow.com/questions/45111198/how-to-mock-functions-in-the-same-module-using-jest" />
