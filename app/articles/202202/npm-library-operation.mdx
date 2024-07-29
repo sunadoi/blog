@@ -1,0 +1,235 @@
+---
+title: TypeScriptでnpmパッケージを作ってみる ~開発・運用編~
+ogImageTitle: TypeScriptで,npmパッケージを作ってみる,~開発・運用編~
+description: 前回の記事でTypeScriptでnpmパッケージを作成する方法を記載した。publishを簡単にするための設定など運用面での設定を記載する。
+tags: TypeScript
+icon: TypeScript
+publishedAt: 2022/02/18
+updatedAt: 2022/02/21
+---
+
+前回TSでnpmパッケージを作るにあたって、tsconfig.jsonやpackage.json、ビルド関連の設定を行なった。
+
+<EmbedLink url="https://suna.dev/articles/npm-library-settings/" />
+
+これによって一通りnpmパッケージをpublishすることができるようになった。
+今回は実際に中身を開発していく際のパッケージの動作確認方法だったり、運用するためのGitHub Actionsでのいい感じの設定方法とかをまとめていく。
+
+具体的には以下のことができるようになる
+
+・yarn linkを使って開発中のパッケージを読み込む
+・PR作成時にブランチ名に応じたlabelをつけてくれるようになる
+・リリース時にリリースノートのドラフトを作成してくれるようになる
+
+## パッケージ開発時の動作確認
+
+実際にパッケージの中身を開発しているとそれを読み込んだ時に正常に動作するかを確認したくなる。
+その度にnpmにpublishするのはやってられないのでローカルで完結させたい。
+
+方法としては圧縮したファイルをインストールする方法と`npm(yarn) link`でシンボリックリンクを貼る方法の2つが代表的
+
+### 圧縮したファイルをインストール
+
+これは動作確認したい内容のものを圧縮ファイルにして、それを使う側でインストールするという方法
+
+具体的には動作確認したいものをまずビルドする。
+その後`npm(yarn) pack`というコマンドを叩くと圧縮ファイルがルートディレクトリに吐き出される。
+
+あとは動作確認するために別の検証用プロジェクトでこの圧縮ファイルのpathに対してインストールを行う
+
+```bash
+yarn add --dev ~/project_path_to_npm_pack_file
+```
+
+ただこの方法だと動作確認するたびにビルドしてインストールし直してってのをやらないといけないので中々めんどい。。。
+しかもインストールする側でyarnのcacheが効いてる？のか分からないがpackage.jsonのversionを変更してビルドし直さないと新しい内容が反映されてなかった
+
+なので次に示すシンボリックリンクを貼る方法の方がおすすめ
+
+### yarn linkでシンボリックリンクを貼る
+
+動作確認したいパッケージで`yarn link`とやるとシンボリックリンクが作成される
+
+あとは動作確認をする検証用のプロジェクトでそのパッケージをインストールする
+この時指定するのはpackage.jsonに記載した`name`の値
+
+```bash
+yarn link package-name
+```
+
+これはシンボリックリンクなので開発しているパッケージの内容と同期されている。
+従って、開発中のパッケージを変更してビルドし直せばそれを読み込んでいるところでもその変更が反映される
+
+さらに前回、ビルドの設定で開発中はwatchモードでビルドするようにしたのでコードの変更は勝手に検知されて再ビルドされる。
+つまり、コードを変更しただけで読み込む側ではその変更が反映されることになるので非常に便利
+
+## ライブラリのバージョンを更新する
+
+開発を継続して行なっていると中身を変更してnpmに再度publishする必要が出てくる
+
+再publishする際にはpackage.jsonの`version`を上げる必要がある
+これはそのままコードとして修正した上でpublishしてもいいのだが、コマンドがあるのでせっかくなのでそちらを使う
+
+```bash
+yarn version --patch
+```
+
+オプション部分は`--minor`や`--major`の他、`prerelease`などもあるので適宜選択する
+
+このコマンドを叩くとpackage.jsonの`version`が適切に変更された上でcommitが作成される
+さらにgitのtagもそのバージョンで付与してくれる
+
+この特徴を活かしてGitHub Actionsでいい感じの運用をすることにした
+具体的にはtagのバージョンが変更された時のみそれを検知して`npm publish`を行う
+
+その他にもリリースノートの作成などを自動化する設定を行なったので以下で見ていく
+
+## GitHub Actionsによる運用の自動化
+
+ここでは2つの自動化機能を取り上げる
+
+1. PR作成時に自動でlabelを付与する
+2. リリースノートの自動作成と`npm publish`の自動化
+
+### 1. PR作成時にlabelを付与する
+
+PRが作成された時に`feature`や`refactor`、`fix`などのlabelを自動的に付与する
+これ自体でも意味はあるのだが、この次に取り上げるリリースノート作成時にこれがとても役に立つことになる
+
+まずworkflowsに以下のようなymlを定義する
+
+```yaml title=".github/workflows/pr-labeler.yml"
+name: PR Labeler
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  pr-labeler:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: TimonVS/pr-labeler-action@v3
+        with:
+          configuration-path: .github/pr-labeler-config.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+次に.github配下に`pr-labeler-config.yml`という名前で以下のようにlabelの設定ファイルを記述する
+
+```yaml title=".github/pr-labeler-config.yml"
+Description: >
+  If you were working on fix/issues#1 branch,
+  pushing to that branch will auto label 'fix'.
+  ex) label_name: ['branch_name']
+
+feature: ["feature/*", "feat/*"]
+fix: ["fix/*", "bug/*", "bugfix/*"]
+chore: "chore/*"
+documentation: ["docs/*", "doc/*"]
+```
+
+これによって例えばbranchの名前が`fix/some-bug`だったら`fix`のラベルがPRに付与されることになる
+
+branch名が上記に対応していないものになっていない場合は意味がなくなってしまうので、それを強制させたかったらcommitlintを別途設定する必要がありそう
+今回はそこまでしなくていいかと思い妥協した
+
+### 2. リリースノートの自動作成とnpm publishの自動化
+
+新しく更新した内容をnpmに公開してアップデートしたいがそれを自動化したい
+どうすればいい感じにできるかと考えた結果、gitのtagをトリガーにするのがよさそうという結論に至った
+
+まずバージョンを上げて公開する際には以下のコマンドを叩く
+
+```bash
+yarn version --patch
+```
+
+これによってバージョンアップのcommitが作られるがその際にそのバージョンでgitのtagが作成される
+ただし、prefixとしてvが付与されているので`v0.0.2`みたいになる
+
+これを普通にpushしてもtagはremoteに反映されなかったのでオプションが必要
+以下のオプション付きでpushすることでremoteにもtagをpushすることができる
+
+```bash
+git push origin --follow-tags
+```
+
+似たようなオプションとして`--tags`というのもあるが、これだとタグのみのpushになって、バージョンアップのコミットそのものがpushされていなかった
+両方pushする際には`--follow-tags`でpushする
+
+これによってremoteでtagsが更新されるのであとはGitHub Actionsでtagsのpushを検知して動くワークフローを書く
+今回やるのは`npm publish`とリリースノートの作成
+
+```yaml title=".github/workflows/release.yml"
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    name: release-npm-package
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: setup-node
+        uses: actions/setup-node@v2
+        with:
+          node-version: "16"
+          registry-url: "https://registry.npmjs.org"
+      - name: can-publish
+        run: npx can-npm-publish --verbose
+      - name: current-package-version
+        run: node -p -e '`CURRENT_PACKAGE_VERSION=${require("./package.json").version}`' >> $GITHUB_ENV
+      - name: release-draft
+        uses: release-drafter/release-drafter@v5
+        with:
+          name: v${{ env.CURRENT_PACKAGE_VERSION }}
+          tag: v${{ env.CURRENT_PACKAGE_VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/cache@v2
+        id: cache_node_modules
+        with:
+          path: "**/node_modules"
+          key: node_modules-${{ hashFiles('**/package.json', 'yarn.lock') }}
+      - run: yarn install --frozen-lockfile
+        if: steps.cache_node_modules.outputs.cache-hit != 'true'
+      - name: publish-to-npm
+        run: yarn publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
+```
+
+`can-npm-publish`はpublishできる条件がそろってないとエラーで落ちる
+
+これをクリアしたあとpublishするpackageのバージョンを取得してGitHubのenvに格納している
+その後リリースノートのタイトルと実際に付与するtagを設定している
+
+最後に実際にpublishを行う
+`NPM_ACCESS_TOKEN`はあらかじめnpmにログインして取得したあと、secretsに格納しておく必要あり
+
+以上の設定で「バージョンアップしてtagを付与、それをpushする」という操作を行えばpublishまで自動化されるようになった
+さらにこんな感じのよく見るリリースノートをdraftで作ってくれる。内容を確認、fixしてリリースするだけでいいので超便利
+
+<Img src="/assets/article/npm-library-operation/release.webp" alt="release noteのスクリーンショット" caption="https://github.com/release-drafter/release-drafter" width="75%" />
+
+## まとめ
+
+実際に開発を行う際の動作確認方法やバージョンアップ時の運用方法について開発しやすいいい感じにできたと思う
+
+gitのtagとかは自分ではあまり使わない機能だったので非常に勉強になった
+
+リリースノートの自動作成とかできて非常に楽しかった
+あとは作りたいものを見つけて実際にライブラリとして公開するだけ。笑
+
+## 参考
+
+<EmbedLink url="https://zenn.dev/yusuke99/books/fcd96342f5cb1b468799/viewer" />
+
+<EmbedLink url="https://github.com/release-drafter/release-drafter" />

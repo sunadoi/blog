@@ -1,0 +1,426 @@
+---
+title: TypeScriptでnpmパッケージを作ってみる ~設定編~
+ogImageTitle: TypeScriptで,npmパッケージを作ってみる,~設定編~
+description: TypeScriptでnpmパッケージを作成する。この記事ではそれぞれの設定内容について記載する。
+tags: TypeScript
+icon: TypeScript
+publishedAt: 2022/02/11
+updatedAt: 2022/02/17
+---
+
+自作のnpmパッケージを作りたくて作ってみた。
+いや、正確には作ろうとしたものがあったのだが、途中で作るモチベーションがなくなったので作って公開まではしていない。笑
+ただ、いつでも作れるようにテンプレート化しておいた。
+
+npmパッケージを作る手順とか必要な設定とか諸々学びが多かったのでちょっと雑だけどメモとして残しておく。
+
+前編と後編に分ける予定だが、今回は前編として以下の設定周りのことを取り扱う
+
+・tsconfig.jsonの設定
+・package.jsonの設定
+・ビルド関連の設定
+
+prettierやeslint、huskyなども設定しているがここでは扱わない
+この辺は以前記事を書いたのでそちらを参照
+
+<EmbedLink url="https://suna.dev/articles/eslint-with-prettier/" />
+
+後編では開発中の動作確認方法やGitHub Actionsを用いたいい感じの運用方法とかをまとめる
+
+## 作成するnpmパッケージの要件
+
+今回作成するパッケージの設定は以下の要件を満たすものとする
+
+・React関連のパッケージ
+・CommonJSでの読み込みは考慮しない(ESMによる読み込みのみを対象とする)
+・TypeScriptを使って記述する
+・ただしビルドはesbuildで行う
+
+一応開発に使った環境を記載しておく
+
+<Message>
+Node: 16.13.0
+yarn : 1.22.10
+typescript: 4.5.5
+react: 17.0.2
+esbuild: 0.14.14
+</Message>
+
+最終的なディレクトリ構成は以下のようになる(必要なものだけ抜粋)
+
+```plaintext
+npm-library
+ ├ lib
+ ├ scripts
+ │  └ bundle.ts
+ ├ src
+ │  └ index.ts
+ ├ .npmrc
+ ├ package.json
+ ├ README.md
+ └ tsconfig.json
+```
+
+## tsconfig.jsonの設定
+
+ビルドはesbuildで行うので、tscの役割としては型チェックと型ファイルの吐き出しのみ
+それに関連する部分だけ抜粋したtsconfigの設定は以下の通り
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    /* Basic Options */
+    "target": "es2019",
+    "module": "es6",
+    "jsx": "react-jsx",
+    "declaration": true,
+    "outDir": "./lib",
+
+    /* Module Resolution Options */
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+  },
+  "include": ["src/**/*.ts"]
+}
+```
+
+### target
+
+どのバージョンにトランスパイルするか
+IE対応不要になった現在、ES5にする必要はなさそうなので適当にサポートしたいES6以上のバージョンにすればよさそう。
+2022年2月現在、サポートされている中で一番古いNodeのバージョンは12で、Nodeのv12ではES2019をサポートしているので今回は`es2019`とした。
+
+今回は記述していないが`lib`の項目がtargetに従って自動で設定されるので、もしes2019以上のバージョンで使いたい構文があったら記述する。
+
+### module
+
+トランスパイル時にどのモジュールパターンで出力するか
+デフォルト値は`target`がES3かES5なら`commonJS`になり、それ以外だと`es6`になる
+ECMAScriptのバージョン全てに対応しているわけではなく、`es6`の次は`es2020`になる。
+`es6`と`es2020`の違いはdynamic importに対応しているかどうか。
+今回は`es6`にしたけど`es2020`でもよかったかもしれない。
+
+<EmbedLink url="https://www.typescriptlang.org/tsconfig#module" />
+
+今回はcommonJSには対応しないが、必要であれば`module`を`commonJS`にしたtsconfigを別で作って、ビルド時にtsconfig.jsonの読み込み設定を分けてビルド仕分けるのが主流っぽい
+
+### declaration
+
+tsファイルからexportされているものを`.d.ts`ファイルに型定義として吐き出してくれるようになる
+
+### outdir
+
+ビルド結果を吐き出す場所
+`dist`とか`build`が一般的な気がするが、npmライブラリでは`lib`ディレクトリに吐き出してるのをよく見る気がするので`lib`とした
+
+### moduleResolution
+
+module解決の方法を指定できる。
+moduleで`es6`にした場合は`classic`になるので`node`を指定している。
+基本これから開発するなら`node`でよさそう。
+(TS 4.5以上で`node12`と`nodenext`なるものがあった)
+
+> You probably won’t need to use `classic` in modern code
+> *https://www.typescriptlang.org/tsconfig#moduleResolution*
+
+どうやらこのオプションはTSでNative ESMを書けるようにするために導入されたものらしい
+ここは別途調査する
+
+### esModuleInterop
+
+commonJS形式のモジュールでdefaultをエクスポートしていない場合でも、ESMでデフォルトインポートすることが可能になる
+
+正直ここもちゃんと理解しきれてないが、ESMしかサポートしない場合はあんまり関係ない気がしている。。
+これも別途ちゃんと調査しようと思う
+
+### pathsの設定
+
+普段ファイル内で`import`を書く時にsrc配下を`@/`で絶対パスとして書けるように設定しているのだが、そうすると吐き出した型定義ファイルもそうなるためパスの解決ができなかった
+
+色々調べたがパスの解決に関してはTSの責務ではないとのことで、webpackとかを使ってやるのが一般的らしい
+んーまあ確かにそうかって感じだがwebpack使いたくないし今回はとりあえずここは妥協して設定しないことにした
+
+## buildの設定
+
+esbuildはcliコマンドでオプションとして色々渡せるのだが今回は設定項目が多いので、スクリプト用のファイルとして別ファイルに切り出してそれをビルド時に実行するようにした
+
+config.json的な設定ファイル用意するのかなって思ったけど、esbuildはそういうの用意していないらしい
+jsファイル作ってそれを実行しろとのこと
+
+<EmbedLink url="https://github.com/evanw/esbuild/issues/39" />
+
+非公式でconfigファイル読み取れるようにしたライブラリとかあるっぽいけど、今回はとりあえず従うことにする
+
+scripts/bundle.tsファイルにビルド用の設定を書く
+参考: [https://qiita.com/faunsu/items/487c7157c211bfc739c1](https://qiita.com/faunsu/items/487c7157c211bfc739c1)
+
+```ts title="scripts/bundle.ts"
+import { build, Message } from "esbuild"
+
+const warningLog = (warning: Message[]) => {
+  warning.forEach((warn) => {
+    console.error("warning: ", warn.text)
+    console.error("detail: ", warn.detail)
+    console.error("path: ", `${warn.location?.file}:${warn.location?.line}:${warn.location?.column}`)
+    console.error(" -> ", warn.location?.lineText)
+  })
+}
+
+const errorLog = (errors: Message[]) => {
+  errors.forEach((err) => {
+    console.error("error: ", err.text)
+    console.error("path: ", `${err.location?.file}:${err.location?.line}:${err.location?.column}`)
+    console.error(" -> ", err.location?.lineText)
+  })
+}
+
+build({
+  entryPoints: ["./src/index.ts"],
+  outdir: "lib",
+  bundle: true,
+  sourcemap: true,
+  minify: process.env.NODE_ENV === "production",
+  external: ["react", "react-dom"],
+  splitting: true,
+  format: "esm",
+  target: "es2019",
+  ...(process.env.NODE_ENV === "production"
+    ? {}
+    : {
+        watch: {
+          onRebuild: (error, result) => {
+            console.log(error, result)
+            console.log("-------------------------------")
+            if (error) {
+              console.error(new Date().toLocaleString(), " watch build failed ")
+              if (error.warnings) warningLog(error.warnings)
+              if (error.errors) errorLog(error.errors)
+              return
+            }
+            if (result) {
+              console.log(new Date().toLocaleString(), " watch build succeeded ")
+              if (result.warnings) warningLog(result.warnings)
+            }
+          },
+        },
+      }),
+})
+```
+
+パッと見てわかりそうなものは詳細を省く
+
+- minifyは本番環境でのビルドのみやればいいので環境変数で切り替えている
+- externalについては下記に記述
+- tsconfigで設定した時と同様、formatをesm, targetをes2019とした
+- 開発環境ではwatchモードでビルドするように設定
+
+### externalにreact, react-domを設定
+
+パッケージ内でReactを使っているとそのパッケージを使用する際に、プロジェクト内でプロジェクト由来のものとパッケージ由来の2つのreactが混在してしまうためreactがエラーを出す
+
+従ってパッケージの開発時にはreactが必要だが、パッケージを使用する際にはパッケージ由来のreactは必要ないという状況になる
+そのためビルド時にexternalにreact, react-domを指定することで、ビルド結果にこれらを含めないようにして上記の問題を解決している
+
+なお、その際にパッケージが使用するreactをパッケージをインストールしたプロジェクト由来のものを使用することを明示するためにpackage.jsonにpeerDependenciesの記載をする必要がある (後述)
+
+## package.jsonの設定
+
+配布するにあたって必要そうな部分だけ抜粋したpackage.jsonが以下の通り
+
+```json title="package.json"
+{
+  "name": "npm-library-template",
+  "version": "0.0.1",
+  "description": "template for creating npm library",
+  "type": "module",
+  "module": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "engines": {
+    "node": ">=12"
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "rimraf lib && run-p build:minify build:types",
+    "build:dev": "rimraf lib && run-p build:watch build:types",
+    "build:watch": "node --loader ts-node/esm scripts/bundle.ts",
+    "build:minify": "NODE_ENV=production node --loader ts-node/esm scripts/bundle.ts",
+    "build:types": "tsc --emitDeclarationOnly",
+    "prepublishOnly": "npm run build",
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/foo/bar"
+  },
+  "keywords": [
+    "react"
+  ],
+  "author": "suna",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": "^16.8.0  || ^17.0.0",
+    "react-dom": "^16.8.0  || ^17.0.0"
+  }
+}
+```
+
+パッとみてわかりそうなものは詳細を省く
+
+<Message type="tips">
+今回は使わないが、もしCLIツールを作成した場合にはコマンドを設定する必要があり、その場合は`bin`というオプションを設定する必要がある
+</Message>
+
+### type
+
+ファイルをESMで動かすために`module`を設定している
+これまでは.jsファイルはcommonjsだったが、それをESMとして扱うためのこのオプションが必要になっているという認識
+
+### module
+
+吐き出したモジュールパターンがcommonjsの場合は`main`にエントリーポイントを書くが、今回はESMなので`module`にエントリーポイントを書く
+
+もし両方サポートしたい場合は、`lib/cjs/index.js`と`lib/esm/index.js`のようにビルド結果を別々の場所に吐き出してそれぞれ`main`と`module`で指定するとよさそう
+
+### types
+
+型定義ファイルのエントリーポイントを書く
+
+### engines
+
+ライブラリ開発に必要なツールのバージョンの設定などを行う
+OSSとして貢献する人がここに指定したバージョンのツールを使って開発せざるを得ない設定にする
+
+今回はNodeのバージョンだけ指定した。
+npmではなくyarnを使うようにも設定できたりする
+
+この設定だけだとwarningになるだけだが、エラーにして強制させるために別途`.npmrc`ファイルを作成して以下の記述をしておく
+
+```plaintext title=".npmrc"
+engine-strict=true
+```
+
+### files
+
+実際に配布に必要なファイルを入れる
+コンパイル後のコードのみ入れるように設定した。
+
+なお、この設定に関わらずREADMEやpackage.json, LICENSEなどは配布に必要なため必然的に配布される
+
+### peerDependencies
+
+buildの設定の時にも言及したが、このライブラリをインストールした際にこのライブラリが使用するreactをプロジェクト由来のものを使うということを明示するためにpeerDependenciesに`react`と`react-dom`を記述している
+
+開発ライブラリの中でreactのhooksを使ったりしている場合はv16.8以上である必要があるのでそれ以上のバージョンであることを指定している
+
+(たまにライブラリのアップデートとかでバージョンが合わないみたいなのに遭遇するけど、ここで指定しているバージョンと実際にプロジェクトで使ってるバージョンで齟齬が出てエラーになったりしてたのかなと思った)
+
+#### yarn linkでの開発時の設定
+
+開発中のパッケージの動作確認時にyarn linkを使用する(次の記事で説明)が、これだとpeerDependenciesが対応していないっぽい
+従って開発時にyarn linkを使いつつ、インストールする側のreactを見るようにするにはwebpackなどでパスの解決方法を明示する必要がありそう
+
+```json title="webpack.config.json"
+resolve: {
+  alias: {
+    react: path.resolve('./node_modules/react'),
+  },
+}
+```
+
+ただこれは試していない
+というのも、viteで動かしているプロジェクトでyarn linkを使って開発してみたら設定不要で読み込めた
+なんならpeerDependenciesすら要らなかった
+バンドルせずにファイルをESMとしてそのまま読み込むからokってことなのかな？
+
+「パッケージ配布時にはpeerDependenciesは必要、困るのはwebpackのプロジェクトでyarn link使って動作確認する時のみ」という認識なので、とりあえずここは妥協して放置した。
+webpack使う状況になったら再度考えるけど、基本自分はvite使う予定なので
+
+### scripts
+
+scriptsの内容を以下に再掲
+本当はprettierやeslintのチェックコマンドなどもあるが割愛。
+ここではbuild関連のものだけ記載する
+
+```json title="package.json"
+"scripts": {
+  "build": "rimraf lib && run-p build:minify build:types",
+  "build:dev": "rimraf lib && run-p build:watch build:types",
+  "build:minify": "NODE_ENV=production node --loader ts-node/esm scripts/bundle.ts",
+  "build:watch": "node --loader ts-node/esm scripts/bundle.ts",
+  "build:types": "tsc --emitDeclarationOnly",
+  "prepublishOnly": "npm run build",
+},
+```
+
+中々混沌としている。。。もうちょいいい書き方ありそうな気もするがこれに落ち着いた
+
+まずビルド時には実行ファイルのビルドと型定義ファイル(.d.tsファイル)のビルドを別々で行う
+型定義ファイルのビルドはtscによるものでこれを`build:types`で行っている
+tscコマンドの`--emitDeclarationOnly`オプションで型定義ファイルのビルドのみ行うようにしている
+
+実際のビルドコマンドは大きく分けて`build`と`build:dev`コマンドの2つであり、これらはそれぞれ本番環境と開発環境用のビルドコマンド(`build:minify`と`build:watch`)を呼び分けている。
+
+共通しているのは両方`rimraf`で既存のビルド結果を削除した後に、`npm-run-all`ライブラリのコマンド`run-p`で実行ファイルのビルドと型定義ファイルのビルドを並列で実行していること
+
+buildのスクリプトはscripts/bundle.tsに記載があるのでそれを実行しており、環境変数でこれらを切り分けている
+
+#### prepublishOnly
+
+実際にnpmパッケージをpublishする際には`yarn publish`のコマンドを叩くことになるのだが、そのコマンドの前に`prepublishOnly`がトリガーされる
+
+ここではpublishする前に最新の内容をbuildし直してから配布するように`npm run build`を設定した
+
+### repository, keywords, author, license
+
+この辺はパッケージの情報として必要なもので、ここに書いた情報が実際にnpmのパッケージのページ見たときに乗ってるような情報として反映される
+
+<EmbedLink url="https://www.npmjs.com/package/react" />
+
+## 実際にpublishする
+
+ここまで設定したらあとはsrc配下に`index.ts`を配置して適当なコードを書く
+
+```ts title="index.ts"
+import { useEffect, useState } from "react"
+
+export const useHelloWorld = () => {
+  const [state, setState] = useState("hello")
+
+  useEffect(() => {
+    setState("world")
+  }, [])
+
+  return state
+}
+```
+
+npmにアカウント登録をして`yarn publish`を叩く
+
+これだけで配布が完了する。
+もちろん別プロジェクトでインストールもできる
+
+注意点としては、パッケージの名前はユニークなものでなければならないのと、すでにpublishしているバージョンと同じバージョンをpublishしようとするとエラーになる。
+そのため、内容を変えて再publishする際には`package.json`の`version`を変更する必要がある
+
+この辺の運用方法は次の記事でもう少し詳細にまとめる
+
+## まとめ
+
+publish自体はすごく簡単にできた
+
+ただ今回見てきたようにtsconfig.json, package.jsonの設定、ビルド関連の設定などは普段開発していてもあまり深くまで調べていないことだったので非常に勉強になった
+
+ES Modules関連の設定項目が至る所で出てきて分かってるようで完全に理解しきれてないなーってのが課題として浮き彫りになってきたので、ここら辺は別途調査しようかと思う。
+ES ModulesにTypeScriptが絡んでくるとかなり複雑になる印象がある
+(浅い理解ではあるが、commonJSとES Modulesの互換性の問題として現状ではdefault export / importする際の挙動で齟齬が出うる気がしているので、基本的にnamed export / importするように書いていればそこまで問題にならない気がした)
+
+次回は実際にライブラリを運用する際に便利なGitHub Actionsの設定だったり、開発中の動作確認の方法などをまとめる予定
+
+## 参考
+
+<EmbedLink url="https://zenn.dev/manycicadas/books/b6f2d99b5208e9" />
+
+<EmbedLink url="https://zenn.dev/yusuke99/books/fcd96342f5cb1b468799/viewer" />
+
+<EmbedLink url="https://qiita.com/matzkoh/items/90baab22ad489b78384b" />

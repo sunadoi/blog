@@ -1,0 +1,275 @@
+---
+title: オブジェクトのvalueの型によってプロパティを削除する型定義
+ogImageTitle: オブジェクトのvalueの型によって,プロパティを削除する型定義
+description: オブジェクトのvalueの型が特定の型である場合にそのプロパティごと削除する型定義の仕方を記載。
+tags: TypeScript
+icon: TypeScript
+publishedAt: 2022/01/08
+updatedAt: 2022/11/22
+---
+
+TSのオブジェクトでvalueの型が特定の型だった場合にそのプロパティを削除したオブジェクトの型を取得したかった。
+たとえばあるオブジェクトの型からstringのプロパティのみを排除した型を取得したいみたいなこと。
+
+```ts
+type Sample = {
+  foo1: string
+  bar: number
+  baz: boolean
+  foo2: string
+}
+
+// string型のプロパティを除いた型が欲しい
+type ExcludeStringSample = {
+  bar: number
+  baz: boolean
+}
+```
+
+これを取得する型を実装しようとしてちょっとハマったのでメモ。
+
+## 今回やりたいこと
+
+例として以下のようなオブジェクトを考える
+
+```ts
+type Sample = {
+  foo1: string
+  bar: number
+  baz: boolean
+  foo2: string
+}
+```
+
+foo1, foo2はいずれもstringでそれ以外のbarとbazはそれぞれnumberとbooleanであるSampleというオブジェクトの型を考える。
+
+この型からstring型であるプロパティを全て取り除いた以下のような型を取り出したい。
+
+```ts
+type ExcludeStringSample = {
+  bar: number
+  baz: boolean
+}
+```
+
+これが実現できるExcludeStringという型を自作するのが今回の目標。
+
+```ts
+type ExcludeStringSample = type ExcludeString<Sample>
+```
+
+＊conditional types, mapped typesなどのTSの機能についてはここでは理解している前提で記述する。
+
+## 失敗例
+
+最初mapped typesを使ってこんな感じで実装したけど上手くいかなかった
+
+```ts {1-3}
+type ExcludeString<T> = {
+  [K in keyof T]: T[K] extends string ? never : T[K]
+}
+
+type ExcludeStringSample = ExcludeString<Sample>
+
+// 結果
+// type ExcludeStringSample = {
+//   foo1: never;
+//   bar: number;
+//   baz: boolean;
+//   foo2: never;
+// }
+```
+
+value部分がneverになってしまってオブジェクトのプロパティそのものは存在してしまう
+
+## 成功例
+
+失敗例の通り、valueの部分でconditional typesを使ってもkey自体は残る。
+なので、conditional typesを使ってvalueを判定するが、keyそのものを取り入れるかどうかを判定したい。
+
+どうしようかと知恵を絞った結果、asによるkeyのremappingを使うと綺麗にできた。
+(asによるremappingはTS4.1以降でしか使えない)
+
+```ts {2}
+type ExcludeString<T> = {
+  [K in keyof T as T[K] extends string ? never : K]: T[K]
+}
+
+type ExcludeStringSample = ExcludeString<Sample>
+
+// 結果
+// type ExcludeStringSample = {
+//   bar: number;
+//   baz: boolean;
+// }
+```
+
+こうすることで、判定する対象はvalueだが実際にその結果を受ける場所はkeyというようにすることができる。
+
+ただしvalueの型が1つだけの時はこれでも良かったが、以下のunion型の時は削除されなかった。
+
+```ts {18}
+type Sample = {
+  foo1: string
+  bar: number
+  baz: boolean
+  foo2: string | number
+}
+
+type ExcludeString<T> = {
+  [K in keyof T as T[K] extends string ? never : K]: T[K]
+}
+
+type ExcludeStringSample = ExcludeString<Sample>
+
+// 結果
+// type ExcludeStringSample = {
+//   bar: number;
+//   baz: boolean;
+//   foo2: string | number
+// }
+```
+
+結果から推測するに、`string | number`のユニオン型の時、`T[K] extends string`は必ずしも満たされないということなのかなと認識している。
+間違っていたら教えてください。
+
+なので、もしユニオン型の時でも対象としたい場合は`string extends T[K]`としてやれば条件が満たされる。
+
+```ts {9}
+type Sample = {
+  foo1: string
+  bar: number
+  baz: boolean
+  foo2: string | number
+}
+
+type ExcludeString<T> = {
+  [K in keyof T as string extends T[K] ? never : K]: T[K]
+}
+
+type ExcludeStringSample = ExcludeString<Sample>
+
+// 結果
+// type ExcludeStringSample = {
+//   bar: number;
+//   baz: boolean;
+// }
+```
+
+ちなみに今回はstringに限定したが、もう一つ型パラメータを受け取るようにすれば任意のvalueの型を持つkeyを削除する汎用的な型を作ることもできる。
+
+```ts {8-10,12}
+type Sample = {
+  foo1: string
+  bar: number
+  baz: boolean
+  foo2: string | number
+}
+
+type ExcludeSomething<T, U> = {
+  [K in keyof T as U extends T[K] ? never : K]: T[K]
+}
+
+type ExcludeNumberSample = ExcludeSomething<Sample, number>
+
+// 結果
+// type ExcludeNumberSample = {
+//   foo1: string
+//   baz: boolean
+// }
+```
+
+## オプショナルなキーの削除
+
+やりたいことはこれで達成できたのだが、ちょっと遊んでみる
+
+オブジェクトでオプショナルなキーを持つ型をVS Code上でホバーすると、オプショナルな部分は`string | undefined`みたいになる。
+
+```ts
+type Sample = {
+  foo?: string
+  bar: number
+}
+
+// ホバーすると以下のように表示される
+type Sample = {
+  foo?: string | undefined
+  bar: number
+}
+```
+
+なので今回自作したやり方でundefinedを持つプロパティを削除するようにすればオプショナルなキーを削除する型を作れるのかなーと思いやってみた。
+
+```ts
+type Sample = {
+  foo?: string
+  bar: number
+}
+
+type ExcludeOptionalKeys<T> = {
+  [K in keyof T as undefined extends T[K] ? never : K]: T[K]
+}
+
+type ExcludeOptionalSample = ExcludeOptionalKeys<Sample>
+
+// 結果
+// type ExcludeOptionalSample = {
+//   bar: number
+// }
+```
+
+見事オプショナルなキーfooは削除することができた。
+ただ、これだと以下のようなオプショナルなキーではないが、ユニオン型としてundefinedを持つプロパティも削除されてしまう。
+
+```ts
+type Sample = {
+  foo?: string
+  bar: number
+  baz: boolean | undefined // これも削除される
+}
+```
+
+こういうケースでも削除したい場合は問題ないが、オプショナルなキーを削除するというニュアンスとは異なったものになってしまう。
+
+このやり方だとオプショナルなプロパティとオプショナルではないがundefinedをユニオン型で持つプロパティを区別できなさそう。
+(できるやり方があったら教えてください！)
+
+どうすればよいかまたまた知恵を絞った結果、元のオブジェクトとRequiredしたオブジェクトを比較してvalueが異なる(= undefiendが付与されている)ものをオプショナルなキーと判断して削除すればいけた。
+(Requiredしたオブジェクトを勝手に初期値としてUに設定する)
+
+```ts {7-9}
+type Sample = {
+  foo?: string
+  bar: number
+  baz: boolean | undefined
+}
+
+type ExcludeOptionalKeys<T, U extends Required<T> = Required<T>> = {
+  [K in keyof T as T[K] extends U[K] ? K : never]: T[K]
+}
+
+type ExcludeOptionalSample = ExcludeOptionalKeys<Sample>
+
+// 結果
+// type ExcludeOptionalSample = {
+//   bar: number
+//   baz: boolean | undefined
+// }
+```
+
+綺麗にオプショナルなキーだけが消せた！
+満足！！
+
+## まとめ
+
+conditional typesとmapped typesがわりと自由に使えるようになってきた。
+この辺使えばやりたいことはある程度できそう。
+取得したい型が取れると気持ちいい
+
+literal typesもこれらに組み合わせて使えるようになってる気はするんだけど、如何せん実務でliteral typesをきちんと使おうという場面を見出せていない。
+
+ここで使えるなという場面を見出す観察眼がまだ足りてない気がするのでその辺をなんとかするのが今後の課題。
+
+## 参考
+
+<EmbedLink url="https://www.typescriptlang.org/docs/handbook/2/mapped-types.html#key-remapping-via-as" />

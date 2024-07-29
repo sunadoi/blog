@@ -1,0 +1,167 @@
+---
+title: type predicateで配列のundefinedを取り除いた型を付ける
+ogImageTitle: type predicateで配列のundefinedを,取り除いた型を付ける
+description: 配列の中にundefinedが含まれる場合、そのままfilterしても型情報からはundefinedが取り除かれない。これをtype predicateを使ってundefinedを取り除いた型を付ける方法を記載。
+tags: TypeScript
+icon: TypeScript
+publishedAt: 2021/09/18
+updatedAt: 2024/07/29
+---
+
+型が`(T | undefined)[]`になってる配列からundefinedを取り除いた`T[]`の配列を作成しようとした時のこと
+
+JS的には問題なかったけどTSで型の推論が`(T | undefined)[]`のままになっていてどうしたらいいんだとなった時に解決できた時のメモ
+
+先に結論を書くと、解決策はほぼ下記のQiita記事の通りである
+めっちゃ参考になりました、ありがとうございます！
+
+<EmbedLink url="https://qiita.com/suin/items/cda9af4f4f1c53c05c6f" />
+
+ほぼ繰り返しになるのだが、type predicateを今までクールに使えたことがなくてちょっと感動したのでメモとして残しておく
+
+<Message>
+2021/9/23 追記
+type predicateを使わなくてもそもそも処理の仕方を変えるだけでより安全にやりたいことが実現できたことに後日気づいた
+ただ、type predicateの使い方として一応この記事の内容は残しておく
+</Message>
+
+<Message type="alert">
+2024/7/29 追記
+TSのv5.5からはfilterでundefinedを取り除いた型を推論してくれるようになったため、この記事の内容は不要になった
+</Message>
+
+
+## 背景
+
+本題に入る前にちょっと背景から
+
+ある配列に対してmapを使って新しく配列を取得したかったんだけど、ある条件の時はその要素はスキップしたかった
+イメージとしては以下のような感じ
+
+```ts
+const newFiles = files.map((file, index) => {
+  if (hoge + index > MaxCount) continue // index使ってその後の処理継続するかどうかを決める
+  ...
+  return newFile
+})
+```
+
+なんだけど、mapの中でcontinueとかbreakとかって使えたっけ？って思ったら案の定使えなかった
+
+大人しく`for...of`使うかーと思って調べたら配列そのものはイテレーターオブジェクトじゃない？。。
+ので、`entries()`を使って下記のようにすると一応行けた
+
+```ts
+const newFiles: File[] = []
+for (const [index, file] of files.entries()) {
+  if (hoge + index > MaxCount) continue // index使ってその後の処理継続するかどうかを決める
+  ...
+  newFiles.push(newFile)
+}
+```
+
+行けたんだけどなんかクールじゃない←
+
+好みの問題かもだけど、そもそも`for...of`で配列に対してpushしてくみたいな操作あんま好きじゃなくて、mapとか使った方が関数型っぽくて好き
+
+ってことで、できはしたんだけどmap使ってなんとかしたいなと思った
+
+mapの中でreturnするとundefinedが返るから配列の中にundefinedが混じる可能性がある
+当然型もundefinedのユニオン型の配列になる
+
+てなわけでundefined混ざった後にundefinedだけ取り除けばいいじゃんと思い、そうすることにした
+
+## 本題
+
+まずは最初やろうとした処理の型がどうなるかを見る
+
+```ts {1}
+// newFilesは(File | undefined)[]になる
+const newFiles = files.map((file, index) => {
+  if (hoge + index > MaxCount) return
+  ...
+  return newFile
+})
+```
+
+undefinedのユニオン型になってしまって困った
+
+ので、undefinedが混ざった配列をフィルタリングする処理を書いてみた
+
+```ts {1,7}
+// newFilesは(File | undefined)[]のまま！
+const newFiles = files.map((file, index) => {
+  if (hoge + index > MaxCount) return
+  ...
+  return newFile
+})
+.filter(e => e !== undefined)
+```
+
+これでめでたし、と思ったら型推論が`(File | undefined)[]`のままだった…！
+
+もちろんJSの処理的にはundefinedが取り除かれたものになっている
+が、TSはそこまで推論できないらしい
+
+調べたら**type predicate(ユーザー定義タイプガード**)を使えばいい感じに推論できるようになるとのこと
+下記のようにすればundefinedが取り除かれた型で推論してくれるようになった！
+
+```ts {1,7}
+// newFilesはFile[]になった！！
+const newFiles = files.map((file, index) => {
+  if (hoge + index > MaxCount) return
+  ...
+  return newFile
+})
+.filter((e): e is Exclude<typeof e, undefined> => e !== undefined)
+```
+
+返ってくる型がundefinedを除いたものであると教えてあげることで希望通りの型になった
+
+ちなみにこのタイプガード嘘をつこうと思えばつけてしまうので使用には注意が必要
+ちゃんと推論してくれるようになるライブラリとか誰か作ってそうな気はするけど調べてない
+
+ちなみにflatMap使って書くこともできるらしい
+
+```ts
+.flatMap(e => e ?? [])
+```
+
+flatMapでこんな使い方できるの初めて知った
+
+けど、直感的にfilterの方が読みやすい気がする
+あとやっぱtype predicate使いたい笑
+
+安全性考えたらflatMapの方がいいのかもしれないけど
+
+## 追記
+
+type predicate使えてテンション上がってたけど、後々よくよく考えたらそもそも最初からfilter使ってからmapしたらtype predicate使うまでもなく処理できてこれでよかったんじゃないかと思った
+
+```ts
+// newFilesはFile[]になった！！
+const newFiles = files.filter((file, index) => {
+  return !(hoge + index > MaxCount)
+})
+.map((file, index) => {
+  ...
+  return newFile
+})
+```
+
+うん、型安全性が保証されるしこっちの方がいいな
+
+mapの中でskipしたい条件がある場合は最初にfilterかけるべきだなと学んだ
+一応この記事はtype predicateの使い方のために残しておく
+
+## まとめ
+
+TSおもしれー！！！
+
+## 参考
+
+<EmbedLink url="https://qiita.com/suin/items/cda9af4f4f1c53c05c6f" />
+
+<EmbedLink url="https://developer.mozilla.org/ja/docs/Web/JavaScript/Reference/Global_Objects/Array/entries" />
+
+<EmbedLink url="https://www.typescriptlang.org/docs/handbook/2/narrowing.html#using-type-predicates" />

@@ -1,0 +1,271 @@
+---
+title: ライブラリ提供の型をtemplate literal typesを使って型安全にする
+ogImageTitle: ライブラリ提供の型を,template literal typesを使って,型安全にする
+description: ライブラリ提供の型がstringになっている場合に、より型安全性を高めるためにtemplate literal typesを使って型を定義する方法を記載。
+tags: TypeScript,React
+icon: TypeScript
+publishedAt: 2022/03/16
+updatedAt: 2022/03/16
+---
+
+TSの**template literal types**をいい感じに使えたのでその時のメモ。
+
+今回はalgolia関連の実装をする過程で使用した。
+algoliaは検索機能を実装するためのReact InstantSearchというUI Componentを提供している。
+このコンポーネントのあるプロパティの型がstringになっているのだが、実際に使用する際には型安全性をもっと高めたいと思ってtemplate literal typesを使って型安全性を高めた。
+
+なお、実際に使用した文脈をそのまま踏襲して書いているため、algolia関連の記載も混じっている。
+また、template literal typesがどういうものかの説明は省略する。
+
+## 背景
+
+template literal typesを使う記述の前に、なぜそれが必要になったかの背景から。
+ちょっと長くなる & algoliaの説明が入るのでtemplate literal typesの記述から見たい場合は飛ばしてok。
+
+algoliaは検索機能を提供するサービスで、firestoreとか使う際には比較的よく使われる。
+実際に検索する際には専用のクエリみたいなものを投げる必要があるのだが、それを自前でクエリビルドして投げるのは中々つらいので、いい感じにクエリを作ってくれるUI Componentが提供されている。
+Reactの場合はそれが**React InstantSearch**というもの。
+
+検索の仕方は色々あるのだが、今回はRefinementListというチェックボックスで選択したものに絞り込む一般的なものを使用する。こんな感じのやつ。
+
+<Img src="/assets/article/library-template-literal-types/instant-search.webp" alt="React InstantSearchのスクリーンショット" width="75%" caption="https://react-instantsearch.netlify.app/storybook/?path=/story/refinementlist–default" />
+
+algolia側にはfirestoreで保持しているデータと同じものを用意しておいて、チェックした項目でフィルタリングした結果を返している。上記の写真の場合はAppleとSonyのOR検索になっている。
+
+上記の様なコンポーネントを作成するには以下の様なコードになる。
+
+```tsx
+import { connectRefinementList } from 'react-instantsearch-dom';
+
+const RefinementList = ({ items, refine }) => (
+  // チェックボックスのUIの実装
+);
+
+const CustomRefinementList = connectRefinementList(RefinementList);
+```
+
+詳細部分をだいぶ省略したが、実際のチェックボックスのUI部分を自分で実装したReact Componentが`Refinement`。
+それをライブラリの`connectRefinementList`に食わせると、チェックボックスをチェックした時にクエリビルドを諸々いい感じでやってくれる`CustomRefinementList` なるReact Componentが出来上がる。
+
+要は`connect~`は自分でカスタマイズしたComponentをalgolia検索用にconnectしてくれるもの。
+`RefinementList`の中のitemsが実際にチェックボックスの項目として表示させるもの、refineがチェックされた時に絞り込みのクエリを発行するために必要な関数。
+
+実際にこれを使う際には以下の様にする。
+
+```tsx
+<CustomRefinementList attribute="foo" />
+```
+
+前置きが少々長くなったがいよいよ本題。
+
+この`attribute`というものは必須のプロパティで、algoliaで検索する際にどのキーで検索するかを指定する。
+つまりalgolia側に以下の様なユーザーデータを表す構造が入っていた場合に、`attribute="age"`としていてチェックボックスで30を選択した場合には年齢が30歳のユーザーを絞り込むことができる。
+
+```tsx
+// あるユーザーのデータ構造
+{
+  name: "foo",
+  age: 30
+}
+```
+
+`name`や`age`はfirestoreで管理しているUserの型と同一である。
+
+ここで問題になるのが、上記の`attribute`の型は`string`になっているため、`attribute`に指定する文字列が意図しないものになっていたとしてもエラーにはならないし気付けない。
+
+```tsx
+<CustomRefinementList attribute="age" />  // OK
+<CustomRefinementList attribute="ages" /> // NGだがエラーにはならない
+```
+
+間違った`attribute`を渡したとしてもエラーにならず、適切な検索が行えていないという状況は非常にいただけないのでこれはエラーになって欲しい。
+それを実現するためにtemplate literal typesを使った。
+
+## template literal typesを使って型安全にする
+
+改めてやりたいことを記述すると、ライブラリが提供している`props`の`attribute`がstringになっているので、template literal typesを使って型安全にする。
+具体的にはUser型が持っている`"foo"`や`"bar"`は受け取れるが存在しない`"baz"`は受け取れないみたいなことがしたい。
+
+先程の`connectRefinementList`の型定義を見てみると以下の様な実装になっていて、型パラメータとして`RefinementListProvided`をextendsしたものを受け取れるようになっていた。
+
+```ts title="@types/react-instantsearch-core/index.d.ts"
+export function connectRefinementList<TProps extends Partial<RefinementListProvided>>(
+  ctor: React.ComponentType<TProps>
+): ConnectedComponentClass<TProps, RefinementListProvided, RefinementListExposed>;
+```
+
+色々いじってみた結果、`connectRefinementList`の型パラメータにtemplate literal typesを使って型安全にした`attribute`の型を渡せば実現したいことができた。
+
+まず、ちゃんと型がstringから絞られているかどうかを見ていく。
+以下の様に`attribute`として文字列の`foo`しか受け取れない`CustomRefinementListProps`を型定義する。これは上述の様に`RefinementListProvided`をextendsしたものである必要がある。
+これを`connectRefinementList`の型パラメータに設定する。
+
+```tsx
+import { connectRefinementList, RefinementListProvided } from 'react-instantsearch-core'
+
+interface CustomRefinementListProps extends RefinementListProvided {
+  attribute: "foo"
+}
+
+const CustomRefinementList = connectRefinementList<CustomRefinementListProps>(RefinementList);
+```
+
+これを実際に使ってみると、意図した通り`attribute`には`foo`しか設定できなくなっている。
+
+```tsx
+<CustomRefinementList attribute="foo" /> // OK
+<CustomRefinementList attribute="bar" /> // NG。型エラーになる！！
+```
+
+こうして意図しない文字列を渡した時に型エラーを出してくれる型安全な世界を創ることができた。
+あとは`attribute`の型として必要なキーだけを設定できる様にすればよいが、必要な全てのキーをベタ書きするのも面倒だしそれはそれでタイポの危険性がある。
+タイポの可能性なく柔軟性を持たせてくれる形で書けるのがtemplate literal types。
+
+今回はプロジェクトで定義している`User`型のキーだけを渡せる様にしたいので以下の様にすればよい。
+
+```tsx
+type User = {
+  name: string
+  age: number
+}
+
+interface CustomRefinementListProps extends RefinementListProvided {
+  attribute: `${keyof User}`
+}
+
+const CustomRefinementList = connectRefinementList<CustomRefinementListProps>(RefinementList);
+
+<CustomRefinementList attribute="name" />   // OK
+<CustomRefinementList attribute="age" />    // OK
+<CustomRefinementList attribute="hobby" />  // NG。型エラー！！
+```
+
+以下の様にすれば、ネストしたオブジェクトのキーを取得したい場合もちゃんとできる。
+
+```tsx
+interface CustomRefinementListProps extends RefinementListProvided {
+  attribute: `user.${keyof User}`
+}
+
+<CustomRefinementList attribute="user.name" />   // OK
+```
+
+これなら実際に`attribute`に書く際にタイポしてても気付けて型安全で素晴らしい。
+
+## コンポーネントを使う側でtemplate literal typesを設定する
+
+実現したいことは概ねできたのだが、これをちょっと応用してみる。
+
+今特定の型を定義して、それを型パラメータとして設定することで型を絞りこんだ。
+検索機能が複数箇所ある場合にそれぞれの場所で別々の`attribute`を設定したい。
+
+### 成功例: 使う側で型定義したコンポーネントを作成する
+
+汎用的な共通コンポーネントを作成しておいて使う側でそれぞれの`attribute`を設定したコンポーネントを作成する様にすれば良い。
+今回はコンポーネントを作成する関数を返すファクトリ関数的なのを作成して、使う際に型を注入できる様にした。
+
+```tsx title="components.tsx" {3-4}
+import { connectRefinementList, RefinementListProvided } from 'react-instantsearch-dom';
+
+export const createRefinementList = <T extends RefinementListProvided>() => {
+  return connectRefinementList<T>(({ items, refine }) => {
+    // チェックボックスのUIの実装
+  })
+};
+```
+
+```tsx title="foo.tsx" {4,6}
+import { createRefinementList } from 'path/to/components'
+
+interface FooCustomRefinementListProps extends RefinementListProvided {
+  attribute: "foo"
+}
+const FooCustomRefinementList = createRefinementList<FooCustomRefinementListProps>();
+```
+
+```tsx title="bar.tsx" {4,6}
+import { createRefinementList } from 'path/to/components'
+
+interface BarCustomRefinementListProps extends RefinementListProvided {
+  attribute: "bar"
+}
+const BarCustomRefinementList = createRefinementList<BarCustomRefinementListProps>();
+
+```
+
+### 失敗例: declare moduleを使った型定義の上書き
+
+当初はdeclare moduleを使用して、使う側で`attribute`を上書きする方向で進めようとしていたが、うまくいかなかったため上記のような形に落ち着いた。
+うまくいかなかった理由をメモとしてここに残しておく。
+
+やろうとしたのは以下の通り。
+
+```tsx title="components.tsx"
+import { connectRefinementList, RefinementListProvided } from 'react-instantsearch-dom';
+
+export interface RefinementListAttribute {
+  attribute: string
+}
+interface RefinementListProps extends RefinementListProvided, RefinementListAttribute {}
+
+const RefinementList = ({ items, refine }) => (
+  // チェックボックスのUIの実装
+);
+
+export const CustomRefinementList = connectRefinementList<RefinementListProps>(RefinementList)
+```
+
+```tsx title="foo.tsx" {3-7}
+import { CustomRefinementList } from 'path/to/components'
+
+declare module 'path/to/components' {
+  interface RefinementListAttribute {
+    attribute: "foo"
+  }
+}
+
+<CustomRefinementList attribute="foo" /> // OK
+<CustomRefinementList attribute="bar" /> // NG。型エラーになる
+```
+
+上記では使う側(foo.tsx)でdeclare moduleを使ってinterfaceの`RefinementListAttribute`をマージして`"foo"`にしている。
+一見型安全になっていてうまく行ってそうに見えるが、別のファイル(bar.tsx)でも同じことをしようとするとエラーになる。
+
+```tsx title="bar.tsx" {5,9-10}
+import { CustomRefinementList } from 'path/to/components'
+
+declare module 'path/to/components' {
+  interface RefinementListAttribute {
+    attribute: "bar" // attributeにはすでに"foo"が設定されているため、エラーになる
+  }
+}
+
+<CustomRefinementList attribute="foo" /> // OK。foo.tsxのdeclare moduleでマージされた内容になっているため。
+<CustomRefinementList attribute="bar" /> // NG。型エラーになる
+```
+
+これに関しては公式ドキュメントにちゃんと記載があった。
+
+> Non-function members of the interfaces should be unique. If they are not unique, they must be of the same type. The compiler will issue an error if the interfaces both declare a non-function member of the same name, but of different types.
+> 
+> *[https://www.typescriptlang.org/docs/handbook/declaration-merging.html#merging-interfaces](https://www.typescriptlang.org/docs/handbook/declaration-merging.html#merging-interfaces)*
+
+interfaceの中で定義されている関数の型はオーバーライドされるが、関数じゃない場合にはマージする際に同じ型である必要がある。
+`attribute`は関数じゃないので拡張する型は同じ型である必要があるが、`"foo"`と`"bar"`は同じ型じゃないのでエラーになる。
+
+今回は使う側で型を設定したかったのでこのアプローチは使えなかったが、使う側で分けずに特定の型に固定する場合はこのアプローチで`.d.ts` ファイルに定義する方がスッキリして良いかも。
+
+もしかしたらモジュール拡張とかアンビエントモジュールとかその辺いい感じに使えればうまくできるのかもだけど、理解があいまいなので現時点ではわからぬ。
+
+## まとめ
+
+template literal types出てきた時、これ何が嬉しいんだろうってのがピンときてなかったんだけど使ってみたらすごい嬉しい機能だった。
+ここまでやるかーと思ったけどこの表現力の豊かさはシンプルにすごいなと思う。
+
+これで実務でTSのconditional types, mapped types, template literal typesはいい感じに使えた！満足！！
+
+今回は使わなかったけどdeclare moduleとかの勉強にもなって非常に有意義であった。
+
+## 参考
+
+https://www.typescriptlang.org/docs/handbook/declaration-merging.html#merging-interfaces

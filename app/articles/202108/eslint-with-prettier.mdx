@@ -1,0 +1,174 @@
+---
+title: eslintとprettierを併用する時の設定
+ogImageTitle: eslintとprettierを併用する時の設定
+description: eslintとprettierを併用する時にどう設定を書けばよいかを記載。
+tags: ESLint
+icon: ESLint
+publishedAt: 2021/08/22
+updatedAt: 2022/01/15
+---
+
+業務でeslintとprettierの設定をいじることがあって、そういえばこの2つってどう設定するのがベストなんだっけってなって調べた時のメモ
+
+公式推奨の形もいつのまにやら変わっていて自分が知っている方法ではなかった
+あと副業でhuskyを設定する機会もあったが、バージョンアップで仕様が変わっていたのでまとめる
+これらについてはすでにいくつか記事が見られるが、備忘録も兼ねてここでアウトプットしておく
+
+**結論、今はeslint-config-prettierのみ設定するのが公式推奨の形**
+
+## eslint-plugin-prettierとeslint-config-prettier
+
+2020年6月まではeslintとprettierを両方使う場合は`eslint-plugin-prettier`と`eslint-config-prettier`の両方を使うのが推奨されていたらしい
+
+ただ、今は`eslint-plugin-prettier`を使用するのは[非推奨](https://github.com/prettier/prettier/blob/554b15473dd4032a036d7db91a8f579e624c9822/docs/integrating-with-linters.md)になっていた
+
+まずはこの両者が何をする物なのかを記載しておく
+
+### eslint-plugin-prettier
+
+eslintを実行する際にprettierの実行も行ってくれるようにするもの
+eslintコマンドを実行したときにprettierのチェックも走っていて不思議だな〜と思っていたが、あれはこのpluginのおかげでprettierの実行もしてくれていたかららしい。とても納得した
+
+ちなみにprettierの実行をeslintが担うことになるのでprettierのエラーもeslintのエラーとして吐かれる
+
+### eslint-config-prettier
+
+**eslintもformatに関する設定を持っていて、それがprettierと競合する場合はeslint側のルールをoffにするためのもの**
+
+なので上記2つを設定する場合は.eslintrc.jsonのextendsに以下のように書けばeslintを走らせたときに競合が起こらないようにprettierも実行されるようにできた
+
+```json title=".eslintrc.json"
+"extends": [
+  ...
+  "plugin:prettier/recommended"
+]
+```
+
+## 公式推奨の方法
+
+今は`eslint-plugin-prettier`を使用する方法は非推奨になっていて、理由は以下の通り
+
+・エディターにフォーマットの警告が前面にでてきてしまう
+・直接 Prettier を実行するより遅い
+・eslintとprettierの間にレイヤーを挟んでいるため不具合が起きる可能性がある
+
+確かに全てその通りだよなという感じ。
+でもじゃあなぜそれまで`eslint-plugin-prettier`を使うことが推奨されていたのかってのがわからなかったんだけど、調べたところどうやらエディタのプラグインでprettierを実行するのが難しかったとかそういう感じなのかな？
+この辺はよくわからなかった。。
+
+とにかく今は`eslint-config-prettier`のみを使用するのが推奨されている
+
+設定方法としては.eslintrc.jsonに以下のように設定するのみ。
+`eslint-plugin-prettier`を設定していたときに記載していた`"plugin:prettier/recommended"`は削除する
+
+```json title=".eslintrc.json"
+"extends": [
+  ...
+  "prettier"
+]
+```
+
+注意点としてはextendsの読み込みは上から順に上書きされていくので、この設定は最後に書くこと
+
+それからscriptsやGitHub Actionsなどの何かしらの記述でeslintのみを動かしていた部分は、prettierコマンドを追記すること
+eslintでprettierを実行してくれなくなったのでユーザー側で行う必要が生じた
+
+```json title="package.json"
+"lint": "eslint --cache --fix src" // before
+"lint": "eslint --cache --fix src && prettier --write src" // after
+```
+
+実際にeslintの設定とprettierのルールが衝突していないかどうかは以下のコマンドで確認できる。
+
+```bash
+npx eslint-config-prettier 'src/**/*.{js,jsx,ts,tsx}'
+```
+
+衝突したルールがあったらそれが表示される
+
+## 保存時に自動でフォーマットするための設定
+
+VS Codeを使っている場合は設定ファイルに以下の項目を追加すれば保存したときにeslintとprettierによる修正を行ってくれるようになる
+
+```json title=".vscode/settings.json"
+{
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": [
+    "source.fixAll.eslint"
+  ]
+}
+```
+
+ここで`eslint.format.enable`をtrueに設定するとeslintによるformatが動いてしまうのでNG
+
+## huskyの設定
+
+副業でコミットする前に静的チェックが走るように設定したいと言われたのでhuskyを設定してあげた
+バージョンアップで仕様が変更してるっぽいので備忘録として残しておく
+現時点での最新バージョンは7.0
+
+まずはhuskyとlint-stagedをinstallする
+その後、package.jsonに以下の項目を追加する
+
+```json title="package.json"
+"lint-staged": {
+  "src/**/*.{js,ts,tsx}": [
+    "prettier --check src",
+    "eslint src --ext .js,.ts,.tsx"
+  ]
+}
+```
+
+この後でhuskyの設定を行い、pre-commitでこのlint-stagedが走るように設定する
+ここでは対象ファイルのコミット時にprettierとeslintを走らせるようにしてある
+
+次にGit hooksを有効化するために以下のコマンドを叩く
+
+```bash
+yarn husky install
+```
+
+そうするとルート直下に.huskyディレクトリが作成される
+
+また、install時に自動的にGit hooksを有効化するためにpackage.jsonに以下の記述を記載する
+
+```json title="package.json"
+"prepare": "husky install"
+```
+
+そして、次のコマンドを叩いてhuskyのpre-commit時に一番最初に設定したlint-stagedの内容が走るようにする
+これによって.huskyのなかにpre-commitファイルが作成される
+
+```bash
+yarn husky add .husky/pre-commit "yarn lint-staged"
+```
+
+これで何かしらのコミットをするとeslintとprettierが走って、エラーになった場合はコミットできないようにできた
+pre-commitだけじゃなくてpre-pushとかも設定できるっぽい
+
+ちなみに一番最初Next.jsのnext lintを走らせるようにしてたのだが、ルート直下にpagesがないみたいなエラーが出てしまった
+pagesはsrc配下にあるので`--dir src`を付与すればいけるかとも思ったがダメだった、、
+
+Next.jsあまり理解しきれてないのだが、何か設定が必要なのだろうか？
+issueとか見てもパッと見当たらなかったので今回はeslintを直接実行するようにした
+
+この辺何かわかる人いたら教えて欲しいです。。
+
+## おわりに
+
+prettierとeslintを併用する場合の設定は、今までなんとなーくわかってるくらいで過ごしてきたから今回ちゃんと調べて理解できたのでスッキリした
+
+あとhuskyの設定方法も自分が知ってる物じゃなかったので知識アップデートできてよかった
+
+ただNext.jsまだまだ初心者だから、この辺の設定と絡むとわからないこと多いなーという感じ
+
+## 参考
+
+<EmbedLink url="https://zenn.dev/teppeis/articles/2021-02-eslint-prettier-vscode" />
+
+<EmbedLink url="https://blog.ojisan.io/prettier-eslint-cli" />
+
+<EmbedLink url="https://zenn.dev/kurao/articles/456f44a6f43d89#5.-husky-%2B-lint-staged%E5%B0%8E%E5%85%A5" />
+
+<EmbedLink url="https://typicode.github.io/husky" />
