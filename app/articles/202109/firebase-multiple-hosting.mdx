@@ -1,0 +1,279 @@
+---
+title: Firebaseで1つのプロジェクト内に複数のサイトをホスティングする
+ogImageTitle: Firebaseで1つのプロジェクト内に,複数のサイトをホスティングする
+description: Firebaseで1つのプロジェクト内に複数のサイトをホスティングする方法を記載。
+tags: Firebase
+icon: Firebase
+publishedAt: 2021/06/08
+updatedAt: 2021/09/19
+---
+
+Firebaseでテスト環境のあるプロジェクト内に複数のサイトをホスティングしたかった
+
+firebaseの設定ファイルをいじるとわりと簡単にできたのだが、本番環境用の別プロジェクトのデプロイもこれまで通りできるようにする必要があって、普通に設定していただけだと見落としていた
+環境構築する過程でfirebaseの設定周りについて色々勉強になったのでまとめておく
+
+## やりたかったこと
+
+テスト環境用のプロジェクト内にすでにアプリケーションがホスティングされている
+
+Storybookの環境がローカルにしかなかったので新しくどこかにホスティングすることになった
+別々のところにホスティングすると管理がめんどくさそうなのでテスト環境用のプロジェクト内に別でホスティングをしたかった
+
+1つのプロジェクト内に複数サイトをホスティングできるとのことだったのでやってみた
+
+## 前提
+
+今回はサンプルプロジェクトを作って実際に操作していく
+
+背景となる設定は以下の通り
+
+<Message>
+テスト環境用プロジェクト: hosting-sample
+ドメイン: hosting-sample.web.app
+
+本番環境用プロジェクト: hosting-sample-prod
+ドメイン: hosting-sample-prod.web.app
+</Message>
+
+Storybookの環境をテスト環境用プロジェクト内にhosting-sample-storybook.web.appとしてホスティングしたい
+
+## やったこと
+
+はじめにこんなこと言うのもなんだが、公式ドキュメントにしたがってやっていけばまぁ普通にできる
+
+https://firebase.google.com/docs/hosting/multisites?hl=ja
+
+
+### ホスティング環境の用意
+
+コマンドとかでもできるが、コンソール上から作るのがわかりやすかったので今回はそれで
+
+プロジェクトのhostingのページに行くと一番下にこんな表示がある
+
+![ホスティングサポートのスクリーンショット](/assets/article/firebase-multiple-hosting/hosting-support.webp)
+
+別のサイトを追加をクリックするとサイトのドメインを入力する画面になるので、hosting-sample-storybookと打って作成
+これだけでホスティング環境が追加される
+超簡単。。。
+
+### ホスティングコマンドの設定
+
+環境が用意できたのでそれぞれの環境にデプロイし分けられるように、設定ファイルをいじっていく
+
+まず、.firebasercがこうなっているはず
+
+```json title=".firebaserc"
+{
+  "projects": {
+    "default": "hosting-sample"
+  }
+}
+```
+
+同一プロジェクト内の複数サイトをデプロイし分けるにはそれぞれにターゲット名を付与して、デプロイする時にそのターゲット名を指定してやる必要がある
+
+やり方は以下のようにコマンドを叩くだけ
+ここではそれぞれのサイトIDをそのままターゲット名として付与する
+(ターゲット名 ホスティングのサイトIDの順番)
+
+```bash
+firebase target:apply hosting hosting-sample hosting-sample
+firebase target:apply hosting hosting-sample-storybook hosting-sample-storybook
+```
+
+すると.firebaserc内に設定が勝手に書き加えられる
+ちなみにコマンドを叩かないで下記ファイルのように直接編集しても大丈夫っぽい
+
+```json title=".firebaserc"
+{
+  "projects": {
+    "default": "hosting-sample"
+  },
+  "targets": {
+    "hosting-sample": {
+      "hosting": {
+        "hosting-sample": [
+          "hosting-sample"
+        ],
+        "hosting-sample-storybook": [
+          "hosting-sample-storybook"
+        ]
+      }
+    }
+  }
+}
+```
+
+これの意味するところは、targetsの中にhosting-sampleというプロジェクト名があって、その中にホスティング用のターゲット名と実際のサイトIDが紐づいているということ
+
+実際にhostingする際の中身はfirebase.jsonで規定されているのでそちらもターゲットごとに指定する必要がある
+まず変更前のfirebase.jsonから
+
+```json title="firebase.json"
+"hosting": [
+  {
+    "public": "build",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+]
+```
+
+これをターゲットごとにホスティングする設定として書き換える
+
+```json title="firebase.json" {3,12-13}#add
+"hosting": [
+  {
+    "target": "hosting-sample",
+    "public": "build",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  },
+  {
+    "target": "hosting-sample-storybook",
+    "public": "storybook-static",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+]
+```
+
+こんな感じでtargetを明示してやってそれぞれのデプロイでどのディレクトリをホスティングするのかをpublicで指定している
+通常のアプリの方ではbuild、storybookをビルドするとstorybook-staticが更新されるようになっているのでpublicにstorybook-staticを指定している
+
+これで準備ok
+
+あとはデプロイしたい内容によって以下のようにコマンドを使い分ける
+
+```bash
+firebase deploy --only hosting:hosting-sample // アプリのデプロイのみ
+firebase deploy --only hosting:hosting-sample-storybook // storybookのデプロイのみ
+firebase deploy --only hosting //両方
+```
+
+### 本番環境用の設定
+
+さて、無事設定できたのだが問題が一つ発生した。
+
+これまではテスト環境も本番環境も同じファイルをデプロイして、デプロイ先を変えているだけだったので以下のそれぞれのコマンドを叩けば良かった
+
+```bash
+firebase deploy --only hosting
+firebase deploy --project=hosting-sample-prod --only hosting
+```
+
+`.firebaserc`でprojectのdefaultはテスト環境になっているのでテスト環境へのデプロイはそのまま
+本番環境へのデプロイは`--project`でプロジェクトIDを明示している
+
+しかし、firebase.jsonでそれぞれのデプロイ環境はtargetが付与されるようになってしまった
+`--only hosting`でtarget名を付与しないと全てのtargetをデプロイしようとするが、本番環境ではテスト環境用に作ったtarget名のサイトは当然存在しないため、エラーになる
+
+よって本番環境でもデプロイできるようにするためには、本番環境用のデプロイ設定も作る必要がある
+.firebasercを以下のように追加して本番環境用のサイトにもターゲット名を付与する
+
+```json title=".firebaserc" {4,17-23}#add
+{
+  "projects": {
+    "default": "hosting-sample",
+    "prod": "hosting-sample-prod"
+  },
+  "targets": {
+    "hosting-sample": {
+      "hosting": {
+        "hosting-sample": [
+          "hosting-sample"
+        ],
+        "hosting-sample-storybook": [
+          "hosting-sample-storybook"
+        ]
+      }
+    },
+    "hosting-sample-prod": {
+      "hosting": {
+        "hosting-sample-prod": [
+          "hosting-sample-prod"
+        ]
+      }
+    }
+  }
+}
+```
+
+ちなみに４行目の`"prod": "hosting-sample-prod"`は–project=prodってできるようにするためのエイリアスの設定なのでなくても問題ない。
+その場合はdeploy時に`--project=hosting-sample-prod`とする必要がある
+
+次にfirebase.jsonでもターゲット名とホスティングの設定を追加する
+
+```json title="firebase.json" {20-28}#add
+"hosting": [
+  {
+    "target": "hosting-sample",
+    "public": "build",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  },
+  {
+    "target": "hosting-sample-storybook",
+    "public": "storybook-static",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  },
+  {
+    "target": "hosting-sample-prod",
+    "public": "build",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  },
+]
+```
+
+内容はテスト環境用と同じだが、target名を変えただけのもの
+
+これで以下のコマンドでそれぞれデプロイ仕分けられるようになった
+
+```bash
+firebase deploy --only hosting:hosting-sample
+firebase deploy --only hosting:hosting-sample-storybook
+firebase deploy --project=prod --only hosting:hosting-sample-prod
+```
+
+調べた限りだとテスト環境用の2つを1つのコマンドでまとめてデプロイしたいと思ってもできなかった
+ターゲット名を省略すると本番環境用のデプロイも走ってエラーになるため。。。
+
+ここはなんかいい方法あるのかもしれないが、わからなかった
+この辺は微妙ーに不便に感じる。。
+
+## まとめ
+
+ホスティングめちゃくちゃ簡単だし、プロジェクトにサイトを追加するのも簡単に出来た
+
+設定ファイルの書き方も直感的でわかりやすかったが、ユースケースによっては微妙に痒いところに手が届かない感がある気がする
+
+設定ファイル周り色々いじって理解深まった！
+
+業務で必要になって実装したんだけど、結局認証挟みたいねってなってfirebaseのhostingだといい感じに認証挟めなさそうだからGCSでやることになりそう
+
+まぁ勉強になったからよし！
+
+## 参考
+
+https://firebase.google.com/docs/hosting/multisites?hl=ja
