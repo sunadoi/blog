@@ -18,7 +18,7 @@ export default createRoute(async (c) => {
             return (
               <a className="hover:scale-105 duration-150" href={`/tags/${tag}`}>
                 <Card type="wide">
-                  <div className="grid grid-rows-4 place-items-center gap-2 h-full">
+                  <div className="grid grid-rows-4 place-items-center gap-4 h-full">
                     <div class="flex items-center row-span-2">
                       <div class="grid place-items-center w-16 h-16">
                         {Icon &&
@@ -31,7 +31,8 @@ export default createRoute(async (c) => {
                           ))}
                       </div>
                     </div>
-                    <p className="row-span-1 font-semibold">{tag}</p>
+                    {/* 改行してカードの高さが合わなくなるため、一旦text-nowrapにする。1行に収まらない場合はスタイリングの仕方を考え直す。 */}
+                    <p className="row-span-1 text-sm font-semibold text-nowrap">{tag}</p>
                     <div className="row-span-1">
                       <Badge size="md">{count}記事</Badge>
                     </div>
