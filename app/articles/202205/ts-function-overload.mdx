@@ -1,0 +1,164 @@
+---
+title: TSの関数のオーバーロード
+ogImageTitle: TSの関数のオーバーロード
+description: TSの関数のオーバーロードがどういう挙動なのかを整理する
+tags: TypeScript,React
+icon: TypeScript
+publishedAt: 2022/05/18
+updatedAt: 2022/05/18
+---
+
+TSで関数のオーバーロードができるのは知っていたしライブラリの実装として見たことはあったが、いい感じに使う場面がイマイチ不明だった。
+実務で使う機会があって勉強になったのでまとめておく。
+
+## 関数のオーバーロードとは
+
+TSではある関数を作成したときに引数の型と返り値の型を定義する。返り値の型は推論に任せる場合もある。
+
+関数のオーバーロードを使うと同じ関数の名前で「引数の型によって返り値の型が変わる関数」だったり、「引数の数によって返り値の型が変わる関数」というのを表現できるようになる。
+
+具体例で見ていく。
+以下のtest関数は第2引数がある場合は第2引数を、ない場合は第1引数をそのまま返す関数である。
+第1引数、第2引数はそれぞれ`number`と`string`なので返り値の型はユニオン型の`number | string`になる
+
+```ts
+function test(arg1: number, arg2?: string) {
+  return arg2 || arg1
+}
+
+// 返り値の型はstring | number
+const result = test(100)
+```
+
+しかし実装内容を考慮すると、実際にはこの関数の返り値は第1引数だけを与えた場合は`number`になるし、第2引数まで与えた場合は`string`になる。
+
+このような実際に使う際の引数の型と返り値の型の組み合わせを柔軟に変えられるのが関数のオーバーロードである。
+実際にオーバーロードを使って見た例がこちら。
+
+```ts {1-2,7,10}
+function test(arg1: number): number
+function test(arg1: number, arg2: string): string
+function test(arg1: number, arg2?: string): string | number {
+  return arg2 || arg1
+}
+
+// 返り値の型はnumber
+const numberResult = test(100)
+
+// 返り値の型はstring
+const stringResult = test(100, "foo")
+```
+
+先程実装した関数の実装の上に、同じ名前で引数の型と返り値の型を定義すればよい。
+ちなみにオーバーロードする部分は実装部分の返り値の型が`string | number`のユニオン型なので、このどちらかである必要があり`boolean`を返り値にするなどはできない。
+逆に言えば、`string | number`のユニオン型を返す場合に本当は`string`を返すのに`number`を返すみたいな嘘をつけてしまうのでここは注意が必要。
+(上記の例だと、2行目を`function test(arg1: number, arg2: string):number` としてもエラーにならず、11行目の型は`number`になってしまう)
+
+## 実際のプロダクトで使ってみる
+
+使い方は理解できたので、もう少し実用的な例で考えてみる。
+今回は`firebase-admin/firestore` にあるFirebaseの型定義を用いる。
+
+firestoreでは`QueryDocumentSnapshot`と`DocumentSnapshot`という2つの型があり型定義を見ると前者は後者をextendsしている。
+
+違いとしてはこれらのsnapshotから実際のデータを取り出すときに`snap.data()`として`DocumentData`を得るのだが、この返り値が`QueryDocumentSnapshot`の場合はundefinedは含まれないが`DocumentSnapshot`の場合はundefinedが含まれる。
+
+```ts
+// QueryDocumentSnapshotの場合はundefinedが含まれない
+function getData(snap: QueryDocumentSnapshot): DocumentData {
+  return snap.data()
+}
+
+// DocumentSnapshotの場合はundefiendが含まれる
+function getData(snap: DocumentSnapshot): DocumentData | undefined {
+  return snap.data()
+}
+```
+
+これを関数のオーバーロードを使って1つにまとめてみる。
+
+```ts
+function getData(snap: QueryDocumentSnapshot): DocumentData
+function getData(snap: DocumentSnapshot): DocumentData | undefined
+function getData(snap: DocumentSnapshot): DocumentData | undefined {
+  return snap.data()
+}
+```
+
+`QueryDocumentSnapshot`は`DocumentSnapshot`をextendsしているものなので、実装部分は`DocumentSnapshot`にしておけばオーバーロードで`QueryDocumentSnapshot`を書いてもエラーにはならない。
+
+これだけだとあまり嬉しくないのでここに返り値のデータにジェネリクスの型を返すような実装にしてみる。
+
+```ts
+function getData<T>(snap: QueryDocumentSnapshot): T
+function getData<T>(snap: DocumentSnapshot): T | undefined
+function getData(snap: DocumentSnapshot): unknown {
+  return snap.data()
+}
+```
+
+実装部分の返り値の型を`unknown`にして、オーバーロード部分に型パラメータを追加してそれを返り値に設定するようにした。
+このように実装しておけば実際にこの関数を使うときに型パラメータを渡してやることで返り値の型がそれに対応するようになる。
+
+```ts
+// resultの型は以下のようになる
+// snapがQueryDocumentSnapshotの場合はUser
+// snapがDocumentSnapshotの場合はUser | undefined
+const result = getData<User>(snap)
+```
+
+厳密には違うのかもしれないが、ここでやったオーバーロードは実質下記のような型アサーションと同じようなことをやっているという認識でいる。
+
+```ts
+function getData<T>(snap: QueryDocumentSnapshot): T {
+  return snap.data() as unknown as T
+}
+```
+
+### 実装部分とインターフェース部分の分離
+
+先程のオーバーロードでまとめた部分で2行目と3行目は同じ型を書いている。
+最初2行目は不要な気もしたが実際には必要である。
+
+```ts
+function getData(snap: QueryDocumentSnapshot): DocumentData
+function getData(snap: DocumentSnapshot): DocumentData | undefined
+function getData(snap: DocumentSnapshot): DocumentData | undefined {
+  return snap.data()
+}
+```
+
+2行目をコメントアウトして引数に`DocumentSnapshot`を与えるとエラーになったことから、３行目はあくまでも実装とその実装内容を満たす型定義とする必要があって、オーバーロードした場合は使う側ではオーバーロードされた型定義に従うという認識でいる。
+
+表現として適切かは分からないが、関数のオーバーロードをした場合、実装部分とインターフェース部分が分かれてオーバーロード部分がインターフェースの定義としての役割を担う的なイメージでいる。
+
+### オーバーロードの適用順序
+
+オーバーロードの適用順序は上から順に適用される。
+つまり、先程のオーバーロードの1行目と2行目を入れ替えて、`QueryDocumentSnapshot`の引数を与えても1行目のオーバーロードが適用されてしまう。
+(`QueryDocumentSnapshot`は`DocumentSnapshot`をextendsしているので1行目に当てはまってしまう)
+
+```ts
+function getData(snap: DocumentSnapshot): DocumentData | undefined
+function getData(snap: QueryDocumentSnapshot): DocumentData
+function getData(snap: DocumentSnapshot): DocumentData | undefined {
+  return snap.data()
+}
+
+// snapがQueryDocumentSnapshotだとしても返り値はDocumentData | undefinedになる
+const result = getData(snap)
+```
+
+## まとめ
+
+存在は知っていてもそれを実際に有意義に使えるかとなると使えないものも多い。
+
+関数のオーバーロードもその1つだったが、今回でちゃんと使い方と注意すべき点を理解できたと思う。
+
+あまり乱用すべきではないと思うし使い所も多くはないかなと思うが、ライブラリの実装ではよく使われる気がしているので今後見る際に正しく読み取れそう。いい勉強になった。
+
+## 参考
+
+あわせて読みたい
+
+https://www.typescriptlang.org/docs/handbook/2/functions.html
