@@ -1,0 +1,219 @@
+---
+title: React v17へのアップデート
+ogImageTitle: React v17へのアップデート
+description: Reactをv17にアップデートする際の注意点などを記載。
+tags: React
+icon: React
+publishedAt: 2021/10/24
+updatedAt: 2021/10/24
+---
+
+Reactがもうそろv18が出るのにプロダクトのバージョンがまだv16なのでとりあえずv17にアップデートしておきたい
+
+本業のプロダクトでいきなりやるのはちょっと怖かったので副業の小さめのプロダクトで素振りしたのでその備忘録
+
+はじめにv17でのいくつかの変更点をおさらいして、それを基に作業した手順とエラー対処を書き記しておく
+何か間違ってたら教えてください
+
+## v17での変更点
+
+詳細は公式のブログ参照として、ここでは簡潔にいくつかだけまとめる
+
+<EmbedLink url="https://reactjs.org/blog/2020/08/10/react-v17-rc.html" />
+
+一部破壊的変更はあるもののさほど多くなく、多くのプロダクトに影響を与えるものではない印象。
+新しい機能は何もなく、次期リリースでの大型アップデートのための踏み台という位置付けらしい
+個人的に大きめの変更だなと思ったのは以下の3つ
+
+・eventのアタッチ先がdocumentではなく、reactがレンダリングされるroot DOMになった
+・新しいJSXの変換がサポートされる
+・useEffectのクリーンアップ関数のタイミングの変更
+
+他にもいくつかあるが、大きく影響ありそうなのはこの辺かなと思ったのでこの3つだけまとめる
+
+### eventのアタッチ先が変わる
+
+eventのアタッチ先が変わることで何が変わるかを正直理解しきれてないんだけど、複数のバージョンを同時に使う場合に困ることがあるっぽい
+
+あと直接DOM操作している場合に`e.stopPropagation()`が動作してくれない問題があるみたいだが、v17ではそれがイベントのアタッチ先が変わったから期待通りの動作になったとか
+
+> For example, if you add manual DOM listeners with `document.addEventListener(...)`, you might expect them to catch all React events. In React 16 and earlier, even if you call `e.stopPropagation()` in a React event handler, your custom `document` listeners would still receive them because the native event is _already_ at the document level. With React 17, the propagation _would_ stop (as requested!), so your `document` handlers would not fire:
+> 
+> *https://reactjs.org/blog/2020/08/10/react-v17-rc.html*
+
+直接addEventListenerしている部分もないし、あまり影響なさそうなので省略
+
+### 新しいJSXの変換
+
+JSXは純粋なJSではないため、何らかの方法でJSに変換する必要がある
+それは通常BabelやTSがやっていて次のように変換されていた
+
+```tsx
+import React from 'react';
+
+React.createElement("div", { id: "foo" }, "bar")
+```
+
+これがv17では次のようになる
+
+```tsx
+import { jsx as _jsx } from "react/jsx-runtime";
+
+_jsx("div", { id: "foo", children: "bar" }, void 0)
+```
+
+これだけ見てもへーそうなんだって感じである。笑
+実際のところこれはJSXからの変換結果が変わっただけであり、我々が書くJSXの書き方は何も変わっていない
+
+のだが、1つ嬉しいことがある
+
+v16までは変換結果は `React.createElement`となっていたので、React Componentを使う際には必ず`import React from 'react'`を書く必要があった。
+しかしv17では変換結果に`React`を含まないので、React Componentを使う際でも`React`をimportする必要がなくなった
+
+```tsx {4,5}
+// v16
+import React, { VFC, useState } from 'react'
+
+// v17
+import { VFC, useState } from 'react' // Reactのimportが必要なくなった！
+
+const Foo: VFC = () => {
+  const [bar, setBar] = useState()
+  ...
+}
+```
+
+これによってちょっとだけバンドルサイズも減る
+
+注意点としてはトランスパイラのバージョンの設定を一定以上にする必要があること。
+なぜなら、先程のjsxのimportはトランスパイラによって自動的に追加されるからである。
+TSだと4.1.0以上にする必要がある
+
+<EmbedLink url="https://devblogs.microsoft.com/typescript/announcing-typescript-4-1/#jsx-factories" />
+
+また、TSの場合はこれまでjsxのコンパイラオプションを`react`にしていたが、環境によって`react-jsx`または`react-jsxdev`にする必要がある
+
+後者がdevelopmentビルドでエラーの情報を出してくれるようになるらしい
+なので環境によって両者を使い分けた方がいい
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    // ...
+    "jsx": "react-jsx", // v16ではreactだった
+    // ...
+  }
+}
+```
+
+### useEffectのクリーンアップ関数のタイミングの変更
+
+コンポーネントがアンマウントされた時、v16まではuseEffectのクリーンアップ関数が同期的に実行されていた。
+v17では常に非同期に実行されるようになった。
+
+具体的には以下のように変更された
+
+**v16**
+① 新しいコンポーネントがレンダリング
+② アンマウントしたコンポーネントのクリーンアップ関数
+③ 新しいコンポーネントのレンダリング結果をDOM, 画面に反映
+
+**v17**
+① 新しいコンポーネントがレンダリング
+② 新しいコンポーネントのレンダリング結果をDOM, 画面に反映
+③ アンマウントしたコンポーネントのクリーンアップ関数
+
+②と③の順番が入れ替わった
+Reactチームは画面を早く表示させることにこだわっている気がする
+
+今まで通り同期的にペイントをブロックする必要がある場合はuseLayoutEffectを使うようにすればよさそう
+
+こちらもクリーンアップ関数内でrefを使ってDOMから何かを取得してなんやかんやしている処理がなければ問題なさそう
+
+## 実際にアップデートしてみる
+
+幸い今回対象にしたソースコードで上記の変更の影響を受けるものはなかった
+もちろん破壊的変更で壊れる場合は修正が必要
+
+修正後、以下の対応を順次していく
+
+### TSなどのライブラリのアップデート
+
+まずTSでトランスパイルする場合はTSを4.1以上にアップデートする必要がある
+tsconfigの設定によってはもしかしたらこの時点でいくつかのエラーが出るかもしれないので解消する
+
+これだけで大丈夫かもしれないが、ついでだったので他のライブラリもまとめてアップデートしてしまった
+eslint系のpluginとかprettierとか諸々
+
+### Reactのアップデート
+
+`react` , `react-dom` をアップデートする。CRAで作成した場合は`react-script` も。
+
+tsconfig.jsonのjsxを書き換える。
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    // ...
+    "jsx": "react-jsx",
+    // ...
+  }
+}
+```
+
+開発環境の場合は `react-jsx`を使うためにこの設定を切り替えるようにした方がいいかもしれない。
+webpackでts-loaderを使っている場合は`compilierOptions`で切り替えられそう。viteの場合はtsconfig2つ用意したりして切り替えるのかな？未調査なのでここは不明
+
+あとviteの場合はesbuildによってトランスパイルするけど、esbuildは現状TS4.1以降みたいにjsxのサポートをしていないっぽいので別途設定が必要そう or pluginでなんやかんや対処できそう？
+この辺はまだやってないので、やったら追記する
+
+### 既存のimportを置き換える
+
+ご丁寧にも既存の`import React`を置き換えるコマンドが用意されているのでありがたく使わせてもらう
+
+```bash
+npx react-codemod update-react-imports
+```
+
+これを使えば`import React from 'react'`が`import { useState } from 'react'`みたいに変換される
+
+### eslintの設定
+
+上記の設定をするとeslintの設定が一部不要になるので以下のようにoffに設定する
+
+```json title=".eslintrc.json"
+{
+  // ...
+  "rules": {
+    // ...
+    "react/jsx-uses-react": "off",
+    "react/react-in-jsx-scope": "off"
+  }
+}
+```
+
+### Amplifyの設定
+
+これまでの設定v17でも正常に動くようになった。めでたし！
+と思ったのだが、Amplifyでデプロイするとエラーになった。。。
+
+1つはバージョン上げた際にnodeのバージョンも上げたのでその影響
+ビルドのcommandに`nvm install 14.18.1`を記述すれば解決した
+
+もう1つはビルド時に`Cannot find module 'levenary'`みたいなエラーが出た
+調べるとnode\_modulesを削除しろみたいな対応方法がヒットしたのでビルド設定のcacheしている部分の記述をコメントアウトしたら通った
+
+## まとめ
+
+Reactチームはここ最近破壊的変更は最小限にしようとしている印象がある
+そのおかげであまりつまづくことなくバージョンアップデートできた
+
+`import React`が必要なくなるってのは知ってたけど、今回ちゃんと調べてなぜ必要なくなるのかがよくわかった！
+
+本業のプロダクト(with vite)でも導入してみる
+
+## 参考
+
+<EmbedLink url="https://reactjs.org/blog/2020/08/10/react-v17-rc.html" />
+
+<EmbedLink url="https://zenn.dev/uhyo/articles/react17-new-jsx-transform" />
