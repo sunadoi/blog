@@ -1,0 +1,199 @@
+---
+title: JSオブジェクトの定義の仕方でハマった話
+ogImageTitle: JSオブジェクトの定義の仕方でハマった話
+description: JSオブジェクトの定義の仕方をよく考えていなくて予期せぬ挙動になってハマった話。
+tags: JavaScript
+icon: JavaScript
+publishedAt: 2022/04/27
+updatedAt: 2022/04/27
+---
+
+オブジェクトの定義の仕方をよく考えていなくて予期せぬ挙動になりハマったので、その原因と対応策をメモ。
+
+結論は、**呼び出すたびに値を動的に変更したいオブジェクトは関数の返り値にして関数として呼び出せ。**
+
+## 背景
+
+まずやろうとしていたことを記載する。
+
+以下のような最終ログイン時間のラベルと実際のタイムスタンプを格納しているオブジェクトの配列を考える。
+
+```js
+const loginOptions = [
+  { label: '3時間以内', from: dayjs().subtract(3, 'hours').unix(), to: dayjs().unix() },
+  { label: '1日以内', from: dayjs().subtract(1, 'days').unix(), to: dayjs().unix() },
+  { label: '3日以内', from: dayjs().subtract(3, 'days').unix(), to: dayjs().unix() },
+]
+```
+
+検索機能の一環で、最終ログイン時間の値を元にそれがどの時間帯まで含まれるかを抽出して、そのlabelの配列を取得したかった。
+つまり、最終ログイン時間が2日前だったら `["3日以内"]`のみ、最終ログイン時間が2時間前だったら `["3時間以内", "1日以内", "3日以内"]`というような感じ。
+その範囲に含まれるものは全て取得してくる。
+
+これを実現するために以下のような関数を作成した。
+
+```js
+const filterOptions = (timestamp: number, options: { label: string, from: number }[]): string[] => {
+  return options.filter(o => o.from <= timestamp && timestamp <= o.to)?.map(o => o.label)
+}
+
+// 使用例
+const loginLabels = filterOptions(dayjs().subtract(2, 'hours').unix(), loginOptions)
+// ["3時間以内", "1日以内", "3日以内"]
+```
+
+上記では第一引数のtimestampが2時間前なので、全てのlabelが該当する。
+
+一つ今回の要件として留意すべき点として、この関数を呼び出した時に毎回その時点での時間を考慮した上で時間の範囲を決めるようにしたい。
+具体例としては、`2022/04/01 09:00:00`時点で呼び出した場合の3時間以内とは`2022/04/01 06:00:00 ~ 2022/04/01 09:00:00`であり、翌日の`2022/04/02 12:00:00`時点で呼び出した場合の3時間以内とは`2022/04/02 09:00:00 ~ 2022/04/02 12:00:00`であるべきである。
+
+## バグが起こった原因
+
+今回この検索機能はサーバー側(functions内)で行われる処理である。
+
+実際にデプロイしてみて動作確認してみると、以下のような状況に陥った。
+
+1\. すでにログインしている状態で、デプロイした直後にリクエストした時は正常に動作する
+2\. ログインし直してリクエストすると必要なlabelを取得できていない
+
+これが起こった原因は以下のoptionsの設定の仕方にある。(再掲)
+
+```js
+const loginOptions = [
+  { label: '3時間以内', from: dayjs().subtract(3, 'hours').unix(), to: dayjs().unix() },
+  { label: '1日以内', from: dayjs().subtract(1, 'days').unix(), to: dayjs().unix() },
+  { label: '3日以内', from: dayjs().subtract(3, 'days').unix(), to: dayjs().unix() },
+]
+```
+
+`loginOptions`はオブジェクトの配列として定義してあり、その内部の値は `dayjs`を使って動的に決めるようにしてあるが、これは最初にファイルが読み込まれた時に値が決まってそれ以降その値が使われてしまう。
+
+つまり、バグが起こった原因を簡素化して時系列順に追うと以下のようになる。
+
+#### デプロイ後のリクエスト
+
+便宜的に最後にログインした時間のタイムスタンプを10000とする。
+
+```js
+const lastLoggedInAtTimestamp = 10000
+```
+
+この値を使って先ほどのlabelの配列を抽出する関数を呼び出す。
+`loginOptions`が以下のように初期化されていたとする。こちらも値は適当。
+
+```js
+// 実際の値
+const loginOptions = [
+  { label: '3時間以内', from: 9000, to: 11000 },
+  { label: '1日以内',   from: 7000, to: 11000 },
+  { label: '3日以内',   from: 3000, to: 11000 },
+]
+
+// 元々の定義
+// const loginOptions = [
+//  { label: '3時間以内', from: dayjs().subtract(3, 'hours').unix(), to: dayjs().unix() },
+//  { label: '1日以内', from: dayjs().subtract(1, 'days').unix(), to: dayjs().unix() },
+//  { label: '3日以内', from: dayjs().subtract(3, 'days').unix(), to: dayjs().unix() },
+// ]
+
+// 呼び出し
+const loginLabels = filterOptions(lastLoggedInAtTimestamp, loginOptions)
+// ["3時間以内", "1日以内", "3日以内"]
+```
+
+この場合は想定通り `["3時間以内", "1日以内", "3日以内"]`が返り値として得られる。
+
+ポイントはloginOptionsの中の`dayjs().unix()`は動的に決まるようになっているが、この値はそのファイルが読み込まれた時点のタイムスタンプであるということ。
+
+#### ログアウトしてからログインし直す
+
+その後、一度ログアウトしてログインし直すと、`lastLoggedInAtTimestamp`の値が変わる。便宜上20000とする。
+
+```js
+// ログインし直した時の値
+const lastLoggedInAtTimestamp = 20000
+```
+
+しかし、loginOptionsの値はファイルが読み込まれた時点で初期化された値のままなので変化しない。
+結果として新しい`lastLoggedInAtTimestamp`に該当するものがないため空配列になってしまう。
+
+```js
+// 実際の値
+const loginOptions = [
+  { label: '3時間以内', from: 9000, to: 11000 },
+  { label: '1日以内',   from: 7000, to: 11000 },
+  { label: '3日以内',   from: 3000, to: 11000 },
+]
+
+// 呼び出し。lastLoggedInAtTimestampは20000になっている
+const loginLabels = filterOptions(lastLoggedInAtTimestamp, loginOptions)
+// []
+```
+
+つまり、上記の方法だとデプロイした時点でのタイムスタンプがずっと使われてしまうためその時々の値を動的に与えることができない。
+
+## 解決方法
+
+呼び出したたびに値を再計算する必要がある。
+なので、配列として定義するのではなく関数として定義して呼び出すたびに値を計算した結果を返すようにすれば良い
+
+```js {2,9,15}
+// 元々の配列としての定義
+const loginOptions = [
+  { label: '3時間以内', from: dayjs().subtract(3, 'hours').unix(), to: dayjs().unix() },
+  { label: '1日以内', from: dayjs().subtract(1, 'days').unix(), to: dayjs().unix() },
+  { label: '3日以内', from: dayjs().subtract(3, 'days').unix(), to: dayjs().unix() },
+]
+
+// 関数としての定義
+const loginOptions = () => [
+  { label: '3時間以内', from: dayjs().subtract(3, 'hours').unix(), to: dayjs().unix() },
+  { label: '1日以内', from: dayjs().subtract(1, 'days').unix(), to: dayjs().unix() },
+  { label: '3日以内', from: dayjs().subtract(3, 'days').unix(), to: dayjs().unix() },
+]
+
+const loginLabels = filterOptions(lastLoggedInAtTimestamp, loginOptions())
+```
+
+こうすれば`loginOptions()`を呼び出したたびにdayjsによる計算が行われてその結果が返される。
+
+たったこれだけ。振り返れば超単純。
+
+学びとしては、呼び出されるたびに動的に値を変えたいものは関数として定義するということ。
+
+## 簡単な動作確認
+
+これまでの話を簡単に確認するためのものをcodesandboxで用意した。
+[https://codesandbox.io/s/object-vs-function-dym16w?file=/src/App.tsx](https://codesandbox.io/s/object-vs-function-dym16w?file=/src/App.tsx)
+
+```js
+import dayjs from "dayjs";
+import { useState } from "react";
+
+const nowObject = dayjs().format("HH:mm:ss");
+const nowFunction = () => dayjs().format("HH:mm:ss");
+
+export default function App() {
+  const [objectTime, setObjectTime] = useState("");
+  const [functionTime, setFunctionTime] = useState("");
+
+  return (
+    <div className="App">
+      <button onClick={() => setObjectTime(nowObject)}>現在時刻</button>
+      <p>オブジェクトで定義した時間: {objectTime}</p>
+      <button onClick={() => setFunctionTime(nowFunction())}>現在時刻</button>
+      <p>関数で定義した時間: {functionTime}</p>
+    </div>
+  );
+}
+```
+
+オブジェクトで定義した時間は何回セットしても時間が変わらないのに対し、関数で定義した時間はクリックするたびにその時の時間でセットされる。
+
+## まとめ
+
+わかってみればめちゃくちゃ単純だけど原因把握にかなり時間がかかった。
+
+時間操作系は再現性取りにくくて大変。今後再現取れない系の問題が起こった時は一つの候補として時間操作系を疑うことを意識したい。
+
+その時々で動的に値を定義したい場合は関数として定義するぞというよい学びが得られた。
