@@ -31,8 +31,7 @@ export default createRoute(async (c) => {
                           ))}
                       </div>
                     </div>
-                    {/* 改行してカードの高さが合わなくなるため、一旦text-nowrapにする。1行に収まらない場合はスタイリングの仕方を考え直す。 */}
-                    <p className="row-span-1 text-sm font-semibold text-nowrap">
+                    <p className="row-span-1 text-sm font-semibold line-clamp-1">
                       {tag}
                     </p>
                     <div className="row-span-1">
