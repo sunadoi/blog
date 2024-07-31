@@ -1,0 +1,179 @@
+---
+title: Cloudflare Workersの0ms cold startsのしくみ
+ogImageTitle: Cloudflare Workersの,0ms cold startsのしくみ
+description: Cloudflare Workersはcold startsが0msであると謳っている。これがどう実現されているのかを調べたのでまとめる。
+tags: Cloudflare Workers,Cloudflare
+icon: Cloudflare Workers
+publishedAt: 2021/12/28
+updatedAt: 2021/12/28
+---
+
+最近VercelがEdge Functionsを発表したり、RemixがCloudflare workersでのデプロイをサポートしたりとエッジコンピューティング周りが何かと熱い気がしている。
+
+FastlyやAWSなど代表的なものはいくつかあるが、その中でもCloudflare workersが色んな機能リリースしたりしてて個人的には興味深かったので、今回はCloudflare workersについて調べたことを簡単にまとめてみる。
+
+特にCloudflare workersの0ms cold startsの実現方法が面白かったのでこれについて取り上げる。
+
+## エッジコンピューティング
+
+エッジコンピューティングの詳細な説明は割愛するが、サーバーに到達する前にCDNで処理をしてクライアントにレスポンスするのでレスポンスがかなり速いことが特徴。
+
+現時点で代表的なエッジコンピューティングには以下のものがある
+
+・Cloudflare Workers
+・Fastly Compute@Edge
+・AWS CloudFront Functions
+・AWS Lambda@Edge
+・Deno Deploy
+・Vercel Edge Functions
+・Netlify Functions
+
+ちなみにAWSではLambda@EdgeとCloudFront Functionsがあるが、Lambda@EdgeはRegion edge、CloudFront FunctionsはEdge locationなのでCloudFront Functionsの方がクライアント側に近いところにいる
+
+## Cloudflare workersの特徴
+
+以下のような特徴がある
+
+・Write in JS, Rust, C, and C++
+・**Support for 0ms cold starts**
+・Edge storage, built in
+　・KV: 結果整合性
+　・Durable object: 強整合性
+
+基本的にJSで書くが、RustやC, C++もサポートしている。
+これはランタイムでこれらが動くというよりかはWasmにコンパイルされて動くという感じらしい。
+
+あとはCDNで使えるstorageが2種類サポートされている。色々調べた感じ、KVは結果整合性、Durable objectは強整合性という違いがある。他にも違いはあるかもしれないが詳しくは調べてない。Durable objectはplanによっては使えなかったりする。
+
+Cloudflare workersの大きな特徴の一つが0ms cold starts。
+これがどういう仕組みかが気になったので調べてみたところ、公式ブログで詳しく説明されていた。
+
+<EmbedLink url="https://blog.cloudflare.com/eliminating-cold-starts-with-cloudflare-workers/" />
+
+これについてはあとでもう少し詳しく見てみる。
+
+### 制限
+
+CPU runtimeが10msとかなり厳しめなので、CPUヘビーな処理は厳しそう。
+ただ、このCPU runtimeはCloudflare workersの処理系としてかかる時間なので、外部APIを叩いて待っている時間とかは含まれないらしい。
+Lambdaは確か含まれるのでこれは嬉しい。
+
+## 0ms cold startsのしくみ
+
+さて、ここからが本題。
+
+以前AWS Lambdaを使っていてコールドスタートに苦しめられた経験がある身としては0ms cold startsの謳い文句はとても気になった。
+
+その仕組みを知るため、まずはなぜコールドスタートが起こるのかを把握し、その後Cloudflare workersではどうやってコールドスタートが起こらないようにしているのかを見ていく。
+
+### なぜコールドスタートが起こるのか
+
+AWS Lambdaをはじめとしたサーバレス環境では、通常コンテナが使われている。
+
+すると、スケールした時はコンテナが新しく立ち上がりそれぞれのコンテナごとにランタイムの初期化や起動などをしなければならなくなる。
+
+当然これにはある程度の時間がかかるため、実際に処理が行われるまでに時間がかかりこれがコールドスタートの原因となる。
+
+一度立ち上げられたコンテナは一定時間後には消失するが、それまでの間は使いまわされる。
+これによるウォームスタートを利用して予めコンテナを一定数立ち上げてプールしておくなどの機能もサポートされてはいるが、立ち上げておくべきコンテナの数を予想しにくかったりするし、それを超えた分は結局コールドスタートになる。
+
+### Cloudflare workersはコンテナを使わない
+
+コンテナを使うとそれぞれのコンテナでオーバーヘッドが生じてしまい、コールドスタートの原因となることがわかった。
+
+そのため、Cloudflare workersではコンテナを使っていない。
+その代わりChromeのJSエンジンv8でも使われているisolateというものを使っている。
+
+isolateってどんなもんなんだろってのも気になったので調べてみた。
+これはちょっと長くなったので記事の最後の方でまとめておく。
+ここでは、「isolateとは軽量なコンテキストで、それぞれのisolateではJSのランタイムを起動する必要がない」とだけ言及しておく。
+
+これのおかげでJSのランタイムを起動するのは1回だけでよくなり、個々のisolateを実行するためのオーバーヘッドはなくなる。
+公式にある以下の図がわかりやすい。
+
+<Img src="/assets/article/cloudflare-workers-cold-start/isolate.webp" alt="isolateの説明図" caption="https://developers.cloudflare.com/workers/learning/how-workers-works#isolates
+" />
+
+isolate技術でのJSランタイム起動にかかる時間は約5msらしい。
+つまり、5msはオーバーヘッドとして依然として存在する。
+
+え、0msじゃないじゃん…と思ったのだが、ここにもカラクリがあった。
+
+TCPでのやりとりには接続を確立するために3way handshakeが行われて、それが終わってから初めてリクエストが飛ぶようになっている。
+そしてこの3way handshakeのやりとりにはホスト名が使われており、JSのランタイム起動にもホスト名が使われる。
+であれば、リクエストが来る前にこの3way handshakeの間にJSランタイムを起動しておこうというわけ。
+公式ブログにある以下の図がわかりやすい。
+
+**通常のリクエスト時にJSランタイムを起動**
+
+<Img src="/assets/article/cloudflare-workers-cold-start/normal-request.webp" alt="通常のリクエスト時にJSランタイムを起動する時のシーケンス図" caption="https://developers.cloudflare.com/workers/learning/how-workers-works
+" />
+
+**3way handshakeの最中にJSランタイムを起動**
+
+<Img src="/assets/article/cloudflare-workers-cold-start/3way-handshake.webp" alt="3way handshake時にJSランタイムを起動する時のシーケンス図" caption="https://developers.cloudflare.com/workers/learning/how-workers-works" />
+
+通常この3way handshakeには5ms以上の時間がかかる。
+よって、リクエストを開始する際にはすでにこのオーバーヘッド分の5msは経過してJSランタイムが起動されている状態になっているため、実質0msでリクエストを処理することができる。
+
+よく考えてあってかしけーってなった。
+
+疑問に思ったのが、JSランタイムの起動は3way handshakeの間に行われるとなっているが、トランスポート層のプロトコルがTCPじゃない場合はどうなるんだろうってこと。
+
+QUICとかでアクセスしたらどうなるんだろうか。
+そもそも対応してないのか5msはオーバーヘッドとしてかかるようになるのか。
+調べてみるとCloudflareとクラウド環境をQUICとかで繋ぐみたいなのは最近発表されていたが、クライアントとの通信でQUIC使うことについての言及は見当たらなかった。
+(これはこれですごいなーと気になっているので別途調べてみようと思う。笑)
+
+この辺あまり詳しくはないので何か勘違いしてるかもしれない。
+色々ツッコミあったり詳しい方いたら教えてください。
+
+というわけで0ms cold startsの実現方法を見てきた。面白い。
+
+## isolateについて
+
+v8でも使われているisolateについて、どういうものなのか気になったので調べてみた。
+と言っても公式ブログに書いてあったことをまとめたものである。
+
+<EmbedLink url="https://blog.cloudflare.com/cloud-computing-without-containers/" />
+
+簡単に特徴をまとめる
+
+・軽量なコンテキストで変数とそれを変更できるコードをグループ化したもの
+・個々のisolateのメモリは完全に分離されている
+・起動時に消費するメモリがかなり少なく、Nodeプロセスよりも100倍速く起動できる
+・1つのプロセスで何百、何千ものisolatesが実行できてシームレスに切り替えられる
+
+### 高価なコンテキストスイッチがない
+
+Lambda上でNodeプロセスを動かすとOSやNodeのそれぞれのプロセス間でコンテキストスイッチが発生する
+
+isolateベースのシステムでは全てのクライアントのコードは単一の同じプロセスの中で動くので、高価で頻繁なコンテキストスイッチは発生しない
+
+その分独自のメカニズムで安全なメモリアクセスを確保しているらしい
+v8がオープンソースだったからそこから頑張ったらしいがかなり大変そう。
+
+これ以上の詳しいことはわからなかったが、v8がどう動いてるかとかも気になってきたなー
+付随してブラウザがどう動いてるのかとかも気になるのでミニブラウザ作ってみたくなった
+
+## まとめ
+
+0ms cold startsのしくみは賢いなーと思った
+
+色々深掘りして見てみると見えない世界が見えてきて面白い。
+もっと深淵を見てみたいのでその辺は今後の目標とする。
+
+あと触ってて思ったけど、めっちゃデプロイが簡単でいい。
+サクッと適当なものをなんか作る時にはすごい良さそうだなと思った。
+
+Cloudflareは最近色々リリースしたりしててアツいと個人的に思ってる。
+
+これからもしばらくはウォッチしていこうと思う。
+
+## 参考
+
+<EmbedLink url="https://blog.cloudflare.com/eliminating-cold-starts-with-cloudflare-workers/" />
+
+<EmbedLink url="https://blog.cloudflare.com/cloud-computing-without-containers/" />
+
+https://developers.cloudflare.com/workers/learning/how-workers-works#isolates
