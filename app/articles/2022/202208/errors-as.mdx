@@ -1,0 +1,187 @@
+---
+title: errors.Asを使ってDBエラーのハンドリングをする
+ogImageTitle: errors.Asを使って,DBエラーのハンドリングをする
+description: errors.Asの使い方を整理して、DBエラーのハンドリングをする方法を記載。
+tags: Go
+icon: Go
+publishedAt: 2022/08/23
+updatedAt: 2022/08/23
+---
+
+goで受け取ったエラーがDBエラーかどうかを判定してハンドリングしたい場面があった。
+こういうケースどうしたらいいんだっけと思った時に`errors.As`を使ったらいい感じにやりたいことができたので記載しておく。
+
+`errors.Is`と`errors.As`はもうすでにいくつか記事があるが、goのエラーハンドリングの仕方についてあまり精通していなく、自分なりに使った上で深掘って調査したことを載せておきたかったのでここで。
+
+<Message>
+go: 1.18
+</Message>
+
+## やりたかったこと
+
+クリーンアーキテクチャっぽい構成にしており、依存関係は`controller → interactor → database`となっている。(interfaceは簡略化のため省略)
+
+この状況で以下のような要件を満たしたかった
+
+・databaseでエラーが起こった時にinteractorでそのエラーをwrapしてcontrollerに返す
+・controllerではエラーの内容で処理を変える
+　　・DBエラーの場合はその内容に応じてレスポンスを変える
+　　・DBエラーじゃない場合は500エラーにする
+
+つまりcotnrollerでエラーハンドリングする際に、DBで起こったエラーなのかどうなのかということを判定した上でハンドリングしたかった。
+
+DBエラーの内容をもう少し具体的に言及しておくと、insert処理の時にprimary keyが重複していてエラーになったかどうかを判別したい。
+
+## errors.Asを使う
+
+結論`errors.As`を使えばうまくできたのだが、それぞれのレイヤーでエラーをどう扱っているかを順番に見ていく
+
+### dabatases層
+
+単に発生したエラーをinteractorに返すだけ。
+
+### interactors層
+
+エラーが発生した場合にどこで発生したかのスタックトレースが追えるようにxerrorsを使ってwrapした上でcontrollerに返している。
+
+```go
+err := i.Repository.Create(userID)
+if err != nil {
+		return xerrors.Errorf("failed to Create: %w", err)
+}
+```
+
+### controllers層
+
+いよいよ本命。
+errが存在した時にその内容に応じてレスポンスを返したい。
+まず、DBエラーかどうかを判定したい。DBエラーじゃない場合は全て500エラーにする。
+
+今回はmysqlを使っていたのでエラーが起こった場合はmysql.MySQLErrorが返されている。
+以下のようにして、`errors.As`でmysqlエラーかどうかを判定して、そうだった場合はさらにエラーコードで条件分岐をしている。
+
+1062はprimary keyの重複で既にデータが作成されていることを示す。
+今回はこの場合エラーではなく204を返すこととしている。それ以外のDBエラーは400エラーにしている。
+(実際には1062はconstで変数定義している)
+
+```go {1-3}
+var dbErr *mysql.MySQLError
+if errors.As(err, &dbErr) {
+	if dbErr.Number == 1062 {
+		ctx.JSON(http.StatusNoContent, nil)
+		return
+	}
+	ctx.JSON(http.StatusBadRequest, map[string]interface{}{"message": dbErr.Message})
+	return
+}
+```
+
+`errors.As`や`errors.Is`は受け取ったエラーでの比較がfalseだった場合にはUnwrapした上で再評価を繰り返すようになっているので、今回のようにinteractorsでエラーをwrapしていても問題なく使えた。
+
+このエラーの時にログを送るとしてもinteractorsでxerrorsを使ってエラーをラップしているので、どこでエラーが起きたかをちゃんとスタックトレースで追うことができるようになっている。
+
+#### errors.Asの挙動
+
+`errors.As`は第一引数に判定したいエラーそのものを、第二引数に判定したいエラーの型のポインタを`target`として渡すようになっている。
+一つ疑問だったのがこれがtrueだった場合に、その中では`target`の方を使って条件分岐の判定を行なっていること。(dbErr.Numberの部分)
+
+```go
+var dbErr *mysql.MySQLError
+if errors.As(err, &dbErr) {
+	if dbErr.Number == 1062 {
+		...
+	}
+}
+```
+
+最初に初期化しているので、あたかもerrの中身がこのtargetであるdbErrにコピーされているみたいな挙動になっている。
+これは実際その通りで、ちゃんとドキュメントにも書いてあった。
+
+> As finds the first error in err’s chain that matches target, and if one is found, sets target to that error value and returns true.
+> 
+> *https://pkg.go.dev/errors#As*
+
+実装を見てもそれっぽい箇所が見つかった。
+
+```go
+val := reflectlite.ValueOf(target)
+...
+val.Elem().Set(reflectlite.ValueOf(err))
+```
+
+確かにそうしないと元のエラーをわざわざキャストしなきゃいけなくて使いにくそう。
+かしこ。
+
+## 実装する上で調査・考慮したこと
+
+### gormでのエラーコード
+
+今回はDBエラーだった場合にそのエラーの内容をMySQLのエラーコードで判定するようにした。
+gormを使っていて、SELECTした時に該当のレコードが見つからなかった場合は、以下のようにgormのエラー定義を使って`errors.Is`で判定するのが一般的かと思う。
+
+```go
+if erros.Is(err, gorm.ErrRecordNotFound) {
+	...
+}
+```
+
+なので、今回もgorm側でいい感じに判定できないかなと思ったのだがどうやらgormで用意しているエラー定義は限られたものだけっぽい。
+
+<EmbedLink url="https://github.com/go-gorm/gorm/blob/master/errors.go" />
+
+issueを見てみると今回みたいにMySQLのエラーコードで判定しているものがあったのでその方法を採用した。
+
+<EmbedLink url="https://github.com/go-gorm/gorm/issues/4037#issuecomment-881834378" />
+
+### errors.Isとの違い
+
+これもいろんなところで既にまとめられてたりするが改めて。
+
+errors.Isは値そのものを比較している。構造体で比較する場合は内容が同じでも参照が異なる場合はfalseになる。
+従って以下のように中身が同じ構造体を用意して比較してもfalseになった。
+
+```go
+myErr := &mysql.MySQLError{Number: 1062, Message: "Duplicate entry '1-1' for key 'index_foo'"}
+if errors.Is(err, myErr) {  // 中身が同じでもfalseになる
+	...
+}
+```
+
+内部実装を見てみたが、`errors.Is`で`gorm.ErrRecordNotFound`が比較できるのは、内部で作成した同じ変数を比較しているからだと思われる。
+
+```go
+// package logger
+var ErrRecordNotFound = errors.New("record not found")
+
+// package gorm
+var ErrRecordNotFound = logger.ErrRecordNotFound
+```
+
+`errors.As`は型としての比較なので内容が異なっていてもtrueとなる。
+むしろ今回見たようにtargetとして用意したものに中身がコピーされる。
+
+いくつか記事を見ていると`errors.Is`はwrapしたものについては使えないという記述がちらほら見られたがこれは誤りだと思う。
+そういった挙動に見えるのはおそらく上記のように参照が異なるケースが大半ではないだろうか。
+そもそも`errors.Is`の実装を見ると`Unwrap`して比較してるので、wrapしたものが使えないとこの実装の意味がなくなってしまう。
+
+### エラーハンドリングのレイヤー
+
+今回はcontorllerでエラーの内容に応じてレスポンスを変更するようにした。
+責務的にはこれでいいかなとは思っているのだが、とはいえinteractorsでエラーを返すのは様々なケースがありそうなのでcontrollerで全てのケースのエラーハンドリングをするのは厳しい気もしている。
+
+interactorsでエラーを返す時にstatus code込みで返せば解決するだろうが責務的にどうなんだという気もして悩ましい。
+今回みたいにcontrollerで事足りる場合はcontroller、厳しい場合はinteractorというのも一貫性がなくて気持ち悪い。
+
+そもそもinteractorsでエラー返すようにすれば、dbエラーかどうかはinteractorsがその場で判断できるので今回みたいな`errors.As`とかする必要もない。
+
+この辺はやりながらどういう形が良さそうかもう少し考えていきたい。
+
+## まとめ
+
+`errors.Is`はこれまで何度か使ったことがあったが、`errors.As`はどう使っていいかふわふわしてたのでちゃんと使い方が理解できたし、ついでに`errors.Is`の挙動もちゃんと深ぼって理解できた。
+
+標準パッケージ含んだ処理もデバッガーで追いながら動作確認できるの非常に理解が進むのでよい。
+
+## 参考
+
+<EmbedLink url="https://pkg.go.dev/errors#As" />

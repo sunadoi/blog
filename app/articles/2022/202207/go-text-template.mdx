@@ -1,0 +1,309 @@
+---
+title: ボイラープレートを一括生成するコマンドを作る
+ogImageTitle: ボイラープレートを,一括生成するコマンドを作る
+description: 雛形のファイルや記述を一括生成するコマンドを作る方法を記載。
+tags: Go
+icon: Go
+publishedAt: 2022/07/12
+updatedAt: 2022/11/22
+---
+
+APIサーバーの開発をGoで行っていて、アーキテクチャとしてクリーンアーキテクチャに沿った形で設計した。
+
+責務が分かれたり、レイヤー毎のユニットテストがやりやすくなったのはいいのだが、新しいエンドポイントを追加する際に追加しなければならない記述が多いのが非常に不満だった。
+controllers, database, interactors, repository, entities…
+エンドポイント追加のたびにこれらにコンストラクタだったりDIだったりを書いていくのは非常にだるい
+
+退屈なことはプログラムにやらせよう、ということでこれらのボイラープレートを自動で一括で生成できる君を作ったのでまとめておく。
+
+## 目指したゴール
+
+クリーンアーキテクチャでエンドポイントを追加する際には各レイヤーに記述を書かなければならず、最低限以下のようなファイルと記述が必要になる。
+
+・controllers: コンストラクタ、interactorsの呼び出し
+・database: コンストラクタ、実際のDB処理
+・interactors: コンストラクタ、アプリケーションロジック
+・repository: databaseのinterface
+
+もちろん処理内容によってはドメインロジックが必要だったり、リクエストパラメータのbind処理が必要になったりするが、それを抜きにしてもこれだけある。
+
+やってられない。毎回0からこれらを記述するのはだるいのでこれらを一括生成したい。
+もちろんアプリケーションロジックなどは処理内容によって大きく変わるが、コンストラクタなどの雛形は一括生成することの恩恵を受けられるはず。
+
+イメージとしては以下のようなコマンドを打つと、適切なファイル名で最低限必要なコードが書かれたものを一括生成する。
+
+```plaintext
+[生成コマンド] file_name=admin_user
+
+// 生成ファイル
+interfaces/controllers/admin_user.go
+interfaces/database/admin_user.go
+usecase/interactors/admin_user.go
+usecase/repository/admin_user.go
+```
+
+このコマンドを作るにあたってのポイントは、以下のように命名規則を揃えること。
+
+・ファイル名は`snake_case`
+・ファイル名に応じて書かれる変数名は`UpperCamelCase`もしくは`lowerCamelCase`
+  (Goのスコープを適切に設定するため)
+
+今回はコマンドラインの引数としてファイル名の`snake_case`を受け取って、ファイル内の記述で使う`UpperCamelCase`と`lowerCamelCase`は`snake_case`から変換することとした。
+
+## ライブラリの調査
+
+目的のことができそうなライブラリを色々探してて最初に見つかったのがwireというライブラリ。
+
+<EmbedLink url="https://github.com/google/wire" />
+
+DIライブラリでわりと人気があるものだが、いわゆるDIコンテナとはちょっと違うらしい。
+そもそもDIコンテナのある言語をちゃんと触ったことがないのでこの辺の違いはわかってない。
+
+このライブラリで目的が達成できるか考えてみたが、結論厳しそう。
+ちゃんと理解できてるか怪しいが、こういったツールはあくまでDIにおける組み立て部分をよしなにやってくれるものであって、組み立てに必要なパーツは自分で定義する必要があるという認識でいる。
+今回やりたいのはそのパーツを自動生成したいという話なので目的にマッチしないかなと思った。
+
+もう少し調べてみると、標準ライブラリに`text/template`なるパッケージがあるらしい。
+引数を渡すとその引数を埋め込んだ文字列を出力してくれるとのこと。
+
+<EmbedLink url="https://kazuhira-r.hatenablog.com/entry/2021/01/09/220048" />
+
+これだ…！！！
+
+ファイル名を引数として渡して、それを変数名に変換した上で文字列として埋め込んだファイルを出力すればいけそう。
+というわけでやってみた。
+
+## text/templateで必要なファイルを生成する
+
+`text/template`の基本的な使い方を見た後に、実際に目的のファイルを生成するという順で見ていく。
+
+### 基本的な使い方
+
+```go {10,12,16}
+package main
+
+import (
+    "log"
+    "os"
+    "text/template"
+)
+
+func main() {
+    tmpl := "Hello {{.}}!\n"
+
+    t, err := template.New("sample").Parse(tmpl)
+    if err != nil {
+        log.Fatal(err)
+    }
+    if err = t.Execute(os.Stdout, "World"); err != nil {
+        log.Fatal(err)
+    }
+}
+
+// コンソール上にHello Worldが出力される
+```
+
+10行目のようなtemplateの文字列を用意しておいて、12行目で`*template.Template`を作成する。
+16行目で`t.Execute`とし、templateに`World`を埋め込んだ文字列を標準出力に出すようにしている。
+
+template中の`{{.}}`の部分に`t.Execute`で渡した引数の文字列が埋め込まれるようになっている。
+
+`t.Execute`の第一引数は`io.Writer`になっているので、ここを標準出力じゃなくてファイルにすればファイルに出力できそう。
+`*template.Template`作成時にも別で用意したファイルをパースすることができるっぽい。
+
+これらを組み合わせてファイル名の文字列を引数として渡すと目的の記述が書かれたファイルを生成する処理を書いてみる。
+
+### ファイル名に応じたファイルを生成する
+
+具体的な記述に入る前に全体的なディレクトリ構成を抑えておく。クリーンアーキテクチャに沿ったディレクトリ構成に加えて、今回templateを作成するために必要なファイル群はtemplatesディレクトリとして分けた。
+ここにコマンド実行のためのmain.goを配置する形にしている。
+
+```plaintext {7-14}
+.
+├── entities
+├── infra
+├── interfaces
+│   ├── controllers
+│   └── database
+├── templates
+│   ├── controllers.tmpl
+│   ├── database.tmpl
+│   ├── domain.tmpl
+│   ├── interactors.tmpl
+│   ├── main.go
+│   ├── main_test.go
+│   └── repository.tmpl
+└── usecase
+    ├── interactors
+    └── repository
+```
+
+まずテンプレートとなるファイルを用意する。
+今回は比較的記述の少ないrepository層の記述を自動生成してみる。
+
+```go title="templates/repository.tmpl"
+//go:generate mockgen -source=$GOFILE -destination=./mock/$GOFILE
+package repository
+
+type {{.UpperCamelCase}}Repository interface {
+	Find() (*{{.UpperCamelCase}}, error)
+}
+```
+
+先ほどとは異なり、埋め込み部分は`{{.UpperCamelCalse}}`となっていて、これは変数として埋め込みができるようにこうしている。
+ファイルによって埋め込む文字列がUpperCamelCaseとlowerCamelCaseの両方だったりすることと、可読性向上のためにこうしている。
+
+次にこのtemplateファイルを使用してファイルを自動生成する部分の記述。
+
+```go title="templates/main.go" {11-14,16,20,26}
+package main
+
+import (
+    "flag"
+    "log"
+    "os"
+    "text/template"
+)
+
+func main() {
+    flag.Parse()
+    snake := flag.Arg(0)
+    lowerCamel := toLowerCamelCase(snake)
+    upperCamel := cases.Title(language.English, cases.NoLower).String(lowerCamel)
+
+    t, err := template.ParseFiles("templates/repository.tmpl")
+    if err != nil {
+        log.Fatal(err)
+    }
+    fp, err := os.Create("usecase/repository/" + snake + ".go")
+    if err != nil {
+        log.Println("error creating"+f.fp+"file", err)
+    }
+    defer fp.Close()
+
+    if err = t.Execute(fp,  map[string]string{"UpperCamelCase": upperCamel}); err != nil {
+        log.Fatal(err)
+    }
+}
+```
+
+11-14行目で受け取った引数のsnake\_caseをlowerCamelCaseとUpperCamelCaseに変換している。
+16行目で先ほどのテンプレートファイルを使用して、`*template.Template`を生成。
+20行目で`usecase/repository`配下に必要なファイルを作成して、26行目でupperCamelのmapでテンプレートに埋め込む文字を渡している。
+
+これで以下のようにコマンドを叩いてみる。
+
+```bash
+go run templates/main.go sample_file
+```
+
+すると該当のファイルが生成される。
+
+```go title="usecase/repository/sample_file.go"
+//go:generate mockgen -source=$GOFILE -destination=./mock/$GOFILE
+package repository
+
+type SampleFileRepository interface {
+	Find() (*SampleFile, error)
+}
+```
+
+あとは他のファイルも自動的に生成されるようにそれぞれのtemplateファイルを用意した上で、自動生成するコード部分を以下のようにループ処理させるように変更する。
+
+```go title="templates/main.go"
+package main
+
+import (
+    "flag"
+    "log"
+    "os"
+    "text/template"
+)
+
+func main() {
+	flag.Parse()
+	snake := flag.Arg(0)
+	lowerCamel := toLowerCamelCase(snake)
+	upperCamel := cases.Title(language.English, cases.NoLower).String(lowerCamel)
+
+	files := []struct {
+		tmpl string
+		fp   string
+		data map[string]string
+	}{
+		{
+			tmpl: "entities.tmpl",
+			fp:   "entities/",
+			data: map[string]string{"UpperCamelCase": upperCamel},
+		},
+		{
+			tmpl: "controllers.tmpl",
+			fp:   "interfaces/controllers/",
+			data: map[string]string{
+				"LowerCamelCase": lowerCamel,
+				"UpperCamelCase": upperCamel,
+			},
+		},
+		{
+			tmpl: "database.tmpl",
+			fp:   "interfaces/database/",
+			data: map[string]string{"UpperCamelCase": upperCamel},
+		},
+		{
+			tmpl: "interactors.tmpl",
+			fp:   "usecase/interactors/",
+			data: map[string]string{"UpperCamelCase": upperCamel},
+		},
+		{
+			tmpl: "repository.tmpl",
+			fp:   "usecase/repository/",
+			data: map[string]string{"UpperCamelCase": upperCamel},
+		},
+	}
+
+	for _, f := range files {
+		t, err := template.ParseFiles("templates/" + f.tmpl)
+		if err != nil {
+			log.Println(err)
+		}
+
+		fp, err := os.Create(f.fp + snake + ".go")
+		if err != nil {
+			log.Println("error creating"+f.fp+"file", err)
+		}
+		defer fp.Close()
+
+		if err = t.Execute(fp, f.data); err != nil {
+			log.Println(err)
+		}
+	}
+}
+```
+
+これでコマンドを叩くだけでボイラープレートが一括生成できるようになった。
+あとは目的の処理に応じて記述内容を修正していけばよい。
+
+ついでにmakefileを使ってコマンドを管理した。
+
+```make title="Makefile"
+scaffold:
+	go run templates/main.go ${FILE_NAME}
+
+// 呼び出し方
+make scaffold FILE_NAME=sample_file
+```
+
+このコマンド1つで5つのファイルをそれっぽい記述が書かれた状態で自動生成できるようになったので開発効率がかなり上がってめでたし。
+
+## まとめ
+
+Goって本当こういう標準ライブラリ充実してるなと思う
+引数がインターフェースになってて汎用性ある形になってるし、色々応用効きそうなのもよい
+
+こういう自動化作業はやってて非常に楽しいし達成感が得られやすいから好きだ
+
+## 参考
+
+<EmbedLink url="https://pkg.go.dev/text/template" />
+
+<EmbedLink url="https://qiita.com/hiro_nico/items/61a5ae7138c6918bc6b5" />

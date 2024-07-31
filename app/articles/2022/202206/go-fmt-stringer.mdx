@@ -1,0 +1,258 @@
+---
+title: Goのfmtパッケージの出力をカスタマイズする方法とその仕組み
+ogImageTitle: Goのfmtパッケージの出力を,カスタマイズする方法とその仕組み
+description: Goのfmtパッケージの出力をカスタマイズする方法とその仕組みについて記載
+tags: Go
+icon: Go
+publishedAt: 2022/06/18
+updatedAt: 2022/06/18
+---
+
+Goについて学び直していて、fmtパッケージのPrintfなどの出力書式をカスタマイズする方法を知った。
+なるほどと思ったのと同時に、どういう仕組みなんだろってのが気になったのでコードリーディングしてみたら納得できて面白かったのでまとめておく。
+
+<Message>
+Go: 1.18
+</Message>
+
+## 出力書式をカスタマイズする
+
+Goのfmtパッケージには以下のような`Stringer`インターフェースが定義されている
+
+```go
+type Stringer interface {
+    String() string
+}
+```
+
+fmtパッケージで文字列を作成する際に、この`Stringer`インターフェースを実装しているとその`String`メソッドの実行結果が用いられる。
+
+```go {9}
+type MyString string
+
+func (s MyString) String() string {
+  return "mystring"
+}
+
+func main() {
+  s := MyString("hello")
+  fmt.Println(s) // 出力結果はhelloではなくmystringになる
+}
+```
+
+これを利用してログに吐き出されると困る秘匿情報などをマスキングすることができる
+
+```go
+type Password string
+
+type User struct {
+  Name     string
+  Password Password
+}
+
+func (s Password) String() string {
+  return "xxxxxxxxx"
+}
+
+func main() {
+  u := User{Name: "userName", Password: "password"}
+  fmt.Printf("%+v", u) // {Name:user1 Password:xxxxxxxxx}
+}
+```
+
+パスワードやクレジットカードのセキュリティ番号など、そのままログに出すみたいなことはさすがにしないと思うが、構造体の中に含まれていて一緒に出力されるみたいなケースはあり得そう
+そういった秘匿情報のものは別で型定義をしてStringerインターフェースを満たすようにメソッドを実装しておくと良さそう
+
+この手法自体知らなかったので勉強になったのだが、調べるとそこそこ情報出てくるのでそれなりにメジャーな方法なのだと思う。
+
+ここからが本題
+今回はこれがどういう仕組みで行われてるかが気になったのでfmtパッケージの中身をコードリーディングしてみたというお話。
+
+## fmtパッケージの中身を読む
+
+`fmt.Printf`関数の終わりまで順に追っていこうと思ったが、さすがに長すぎたので今回知りたかった部分だけピックアップする。
+
+fmtではppというstructが定義されている。Printfメソッドを実行するにあたって必要な情報はこの中で管理してこれを取り回して操作しているという認識。
+例えば出力時のフォーマットの形式なんかもここで管理されている。
+
+```go
+// pp is used to store a printer's state and is reused with sync.Pool to avoid allocations.
+type pp struct {
+  // arg holds the current item, as an interface{}.
+  arg any
+  // fmt is used to format basic items such as integers or strings.
+  fmt fmt
+  ...
+}
+```
+
+このpp構造体が持っているメソッドにhandleMethodsというものがある。
+その一部を抜粋したものが以下のもの。(本当はもっとコメントとかが書かれているが省略している)
+
+```go {6,8,11}
+func (p *pp) handleMethods(verb rune) (handled bool) {
+  // 省略
+
+  switch verb {
+  case 'v', 's', 'x', 'X', 'q':
+    switch v := p.arg.(type) {
+    // 省略
+    case Stringer:
+      handled = true
+      defer p.catchPanic(p.arg, verb, "String")
+      p.fmtString(v.String(), verb)
+      return
+    }
+  }
+}
+```
+
+ポイントは6行目のswitch文で`p.arg`には今回出力させたい構造体のフィールドが入っている。
+`p.arg.(type)`は型switchであり、これによってフィールドの型情報を判定している。
+そういえばGoではこうやって型情報判定するんだったっけな。全然覚えてなくて一瞬固まった。
+
+8行目に`case Stringer:`とあり、そのフィールド`Stringer`インターフェースを実装していればここの中の処理が行われる。
+
+その中の処理では、11行目で`v.String()`を呼び出している。
+つまり`Stringer`インターフェースを実装していた場合は、ここでその処理が呼ばれていることになる。
+
+その場合は返り値である`handled`をtrueにして処理を終えている。
+ちなみに`Stringer`インターフェースを実装していない場合は`handled`がfalseで返され、呼び出し元の方でfmtパッケージが持つ文字列の組み立てを行なっていた。
+
+まとめると**`Stringer`インターフェースを満たす実装を作成していた場合はそれが呼び出され、そうじゃない場合はfmtパッケージのメソッドが呼び出されるという仕組み**になっていた。
+
+型switchでインターフェースを実装しているかどうかを判定して呼び分けていたというわけ。
+知りたいことは知れた、満足である。
+
+### Errorメソッドによる拡張
+
+実は先程省略した記述の中にerrorインターフェースかどうかを判定している部分がある。
+
+```go {7-11}
+func (p *pp) handleMethods(verb rune) (handled bool) {
+  // 省略
+
+  switch verb {
+  case 'v', 's', 'x', 'X', 'q':
+    switch v := p.arg.(type) {
+    case error:
+      handled = true
+      defer p.catchPanic(p.arg, verb, "Error")
+      p.fmtString(v.Error(), verb)
+      return
+    case Stringer:
+      handled = true
+      defer p.catchPanic(p.arg, verb, "String")
+      p.fmtString(v.String(), verb)
+      return
+    }
+  }
+}
+```
+
+これまで見てきた`Stringer`インターフェースと同様に`error`インターフェースを実装することで`fmt.Errorf`の内容も拡張できる。
+`error`インターフェースはstringを返す`Error`メソッドを持つだけである。
+
+```go
+type error interface {
+  Error() string
+}
+```
+
+こっちの`error`インターフェースを実装してエラーハンドリングを拡張するパターンは見たことあった。
+同じような仕組みで動いてたのかと腹落ちした。
+
+### GoStringインターフェース
+
+実は先ほどの出力でフォーマットを`%#v`にすると出力結果がうまくカスタマイズされていない。
+
+```go {14-15}
+type Password string
+
+type User struct {
+	Name     string
+	Password Password
+}
+
+func (s Password) String() string {
+	return "xxxxxxxxx"
+}
+
+func main() {
+  u := User{Name: "userName", Password: "password"}
+  fmt.Printf("%+v", u) // {Name:user1 Password:xxxxxxxxx}
+  fmt.Printf("%#v", u) // main.User{Name:"user1", Password:"password"}
+}
+```
+
+`%#v`はGoの構文で出力されるフォーマットである。
+実装を見てみると、フォーマットが`#v`の場合はそもそも先ほどの条件式の中に処理が来ていない。
+具体的には以下のようになっている。
+
+```go {4-11}
+func (p *pp) handleMethods(verb rune) (handled bool) {
+  // 省略
+
+  if p.fmt.sharpV {
+    if stringer, ok := p.arg.(GoStringer); ok {
+      handled = true
+      defer p.catchPanic(p.arg, verb, "GoString")
+      p.fmt.fmtS(stringer.GoString())
+      return
+    }
+  } else {
+    switch verb {
+    case 'v', 's', 'x', 'X', 'q':
+      switch v := p.arg.(type) {
+      // 省略
+      case Stringer:
+        handled = true
+        defer p.catchPanic(p.arg, verb, "String")
+        p.fmtString(v.String(), verb)
+        return
+      }
+    }
+  }
+}
+```
+
+4行目でフォーマットが`#v`かどうかを判定している(別の場所で`#v`の場合は`sharpV`を`true`にする処理がある)
+trueだった場合は`GoStringer`インターフェースを実装しているかどうかを判定して、実装していた場合はそれを呼び出している。
+(ちなみにelseの中が先ほどの条件式部分)
+
+つまり、`#v`でも出力をカスタマイズするためには`Stringer`インターフェースではなく`GoStringer`インターフェースを実装する必要があることがわかる。
+
+```go {12-14,19}
+type Password string
+
+type User struct {
+  Name     string
+  Password Password
+}
+
+func (s Password) String() string {
+  return "xxxxxxxxx"
+}
+
+func (s Password) GoString() string {
+  return "GoString xxxxxxxxx"
+}
+
+func main() {
+  u := User{Name: "userName", Password: "password"}
+  fmt.Printf("%+v", u) // {Name:user1 Password:xxxxxxxxx}
+  fmt.Printf("%#v", u) // main.User{Name:"user1", Password:GoString xxxxxxxxx}
+}
+```
+
+無事、`%#v`でも出力をカスタマイズすることができた。
+
+## まとめ
+
+エラーをカスタマイズできるのは知ってたが、通常の`fmt.Printlnf`もカスタマイズできるのは知らなかったので勉強になった。
+
+実際の実装を見ることで点と点が色々と繋がっていって楽しかった。
+
+## 参考
+
+<EmbedLink url="https://qiita.com/tenntenn/items/453a09c4c6d7f580d0ab" />
