@@ -1,0 +1,130 @@
+---
+title: ブラウザレンダリングのしくみ
+ogImageTitle: ブラウザレンダリングのしくみ
+description: ブラウザがレンダリングを行う仕組みについて簡単にまとめた。
+tags: ブラウザ
+icon: ブラウザ
+publishedAt: 2021/10/03
+updatedAt: 2021/10/03
+---
+
+ある日、仮想DOMのしくみについて知りたくなって調べていたらそもそもブラウザのレンダリングのしくみをちゃんと理解していないなと思って調べた
+
+その時はweb上の記事を色々漁ってなんとなく理解したんだけど、最近書籍読んで改めてちゃんと理解できたので簡単にまとめておく
+
+近々仮想DOMのしくみについてもちゃんとまとめたいと思っている
+
+自分のメモ用なのでわりと雑めにレンダリングの全体像だけ書いておく
+より詳細は一番最後の”参考”欄に色々リンク貼ったのでそちらを参照
+
+## 全体の流れ
+
+レンダリングは大きく分けて次の4つの工程からなる。この4つの工程をまとめてフレームという
+
+1\. リソースの読み込みとパース処理
+2\. JavaScriptの実行
+3\. レンダリングツリーの構築
+4\. ペイント(描画)
+
+色んな書籍や記事を見たが、各工程の区切り方は微妙に違ったりする
+標準化されたものがあるのかもしれないが詳細は調査していない
+理解する上では大差ないと思うので、今回は上記の区分に従ってまとめる
+
+## 1\. リソースの読み込みとパース処理
+
+まずはじめにHTMLやCSS、JavaScript、画像などのファイルをダウンロードしてくる
+
+次に、それぞれに対してレンダリング処理に必要な形にパース処理を行う
+ここではHTMLとCSSについて扱う
+
+### HTMLからDOMを作成する
+
+HTMLは字句解析によるトークン化、構文解析による構文木の構築が行われた後、DOMツリーの構築が行われる
+
+<Message>
+改めてDOMについて記載
+Document Object Modelの略で、HTMLのドキュメントを表現するためのオブジェクト。
+</Message>
+
+ブラウザはDOMツリーを元にしてレンダリング処理を行う。構築されたDOMツリーはドキュメント内で実行されるJSからアクセスできるようになっている。
+
+<Img src="/assets/article/browser-rendering/dom.webp" alt="DOM構築の図" caption="https://developers.google.com/web/fundamentals/performance/critical-rendering-path/constructing-the-object-model" />
+
+### CSSからCSSOMを作成する
+
+CSSOMもDOMと同じようなツリー構造。これもDOM同様、JavaScriptからアクセスできる
+
+<Img src="/assets/article/browser-rendering/cssom.webp" alt="CSSOM構築の図" caption="https://developers.google.com/web/fundamentals/performance/critical-rendering-path/constructing-the-object-model" />
+
+HTMLとCSSは両方**レンダリングブロックリソース**と呼ばれる。
+つまり、ブラウザはDOMの構築とCSSOMの構築が完了するまで、レンダリング処理を保留する。
+
+## 2\. JavaScriptの実行
+
+JavaScriptは字句解析、構文解析の後、コンパイルを経て実行可能コードとなり実行される
+これらの一連の流れはブラウザの**JavaScriptエンジン**によって行われる
+
+JavaScriptエンジンはブラウザによって異なるのでコンパイル方法も使用しているブラウザに依存する
+コンパイル方法はJITコンパイル型や仮想マシン型があり、ChromeのV8やSafariのNitroはJITコンパイル型。
+
+詳細は割愛するが、パフォーマンスの違いやマルチプラットフォーム対応が容易かなどの違いがある。
+
+### JavaScriptを非同期で読み込む
+
+JavaScriptはscriptタグによって読み込まれる
+デフォルトの設定だとscriptタグが読み込まれている間はDOMの構築だけでなくCSSの読み込みもブロックされる
+
+defer属性やasync属性を付けることで非同期で読み込むことができるようになる。
+詳細は割愛するが、これら2つは実行されるタイミングや順序の保証が異なる。
+
+パフォーマンスの観点からはできるだけasyncを使った読み込みをするべきで、それで困る場合はdeferで読み込みをすることを考慮した方がよい
+
+## 3\. レンダリングツリーの構築
+
+レイアウトツリーって書いてる書籍とかも見るけどレンダリングツリーと同じという認識でいる。
+
+ここではDOMとCSSOMを元にどのDOMにどのようなCSSプロパティが当たるのかを計算する
+その後、視覚的なレイアウト情報の計算、**レイアウト**を行う
+つまり、マージンやパディング、要素の位置などの計算
+
+あくまで視覚化のための計算なので視覚化されない`display: none`や`<head>`タグなどはレンダリングツリーからは省かれる
+(`visibility: hidden`は非表示だが要素としては存在するのでレンダリングツリーに組み込まれる)
+
+
+<Img src="/assets/article/browser-rendering/render-tree.webp" alt="レンダリングツリーの図" caption="https://developers.google.com/web/fundamentals/performance/critical-rendering-path/render-tree-construction" />
+
+## 4\. ペイント(描画)
+
+ついに最終段階、レンダリングツリーの内容を元に実際のピクセルに変換して描画を行う
+
+描画は大きく分けてラスタライズとレイヤーの合成という2つの段階で行われる
+
+### ラスタライズ (Rasterize)
+
+レンダリングツリー内の各ノードをレイヤー単位でピクセルに変換していく
+このレイヤーはz軸の上下関係を持つ
+
+描画の前にレイヤーという単位で一度実際のピクセルに描画するのは、再レンダリングする際にすでに描画が終わっているレイヤーを再利用することで素早く再レンダリングできるようにするためである。
+
+### レイヤーの合成
+
+ラスタライズしてできたレイヤーを合成して最終的なレンダリング結果を生成する
+
+この処理は基本CPUで行われるが、CSSを適切に設定することでGPUで処理することもできるらしく処理の高速化に利用されるらしい
+
+## 再レンダリングについて
+
+再レンダリングの際にはこれまでに説明した一部のフェーズのみが再実行される場合もあれば、複数のフェーズが再実行される場合もある
+
+当然、DOMの変更などの上流の変更があると再実行されるフェーズが多くなる
+パフォーマンスを考える上では、操作によってどの部分が再実行されるかを把握しておくとよい
+
+## 参考
+
+<EmbedLink url="https://developers.google.com/web/fundamentals/performance/critical-rendering-path" />
+
+<EmbedLink url="https://www.amazon.co.jp/gp/product/4774189677/ref=ppx_yo_dt_b_asin_title_o01_s00?ie=UTF8&psc=1" />
+
+<EmbedLink url="https://zenn.dev/ak/articles/c28fa3a9ba7edb#painting" />
+
+<EmbedLink url="https://coliss.com/articles/build-websites/operation/work/how-the-browser-renders-a-web-page.html" />
