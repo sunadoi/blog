@@ -21,6 +21,7 @@ import { VitestIcon } from "@/components/parts/icons/Vitest"
 import type { JSX } from "hono/jsx/jsx-runtime"
 
 export type ArticleIconKey =
+  | "ブラウザ"
   | "JavaScript"
   | "TypeScript"
   | "React"
@@ -48,6 +49,7 @@ export const ArticleIconMap = new Map<
   ArticleIconKey,
   (() => JSX.Element) | string
 >([
+  ["ブラウザ", "🌐"],
   ["JavaScript", JavaScriptIcon],
   ["TypeScript", TypeScriptIcon],
   ["React", ReactIcon],
