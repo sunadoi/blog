@@ -1,0 +1,322 @@
+---
+title: Firebase SDKでSuspense非同期処理を行う
+ogImageTitle: Firebase SDKで,Suspense非同期処理を行う
+description: Firebase SDKを使ったデータ取得とSuspenseを組み合わせた使い方について調査したことを記載。
+tags: React,Firebase
+icon: React
+publishedAt: 2022/01/22
+updatedAt: 2022/01/22
+---
+
+普段FirebaseのSDKを使っているのだが、データ取得時にReactのSuspenseを使いたかった。
+
+そのためにはデータ取得中はPromiseをthrowする必要があるが、当然SDKではそんな仕様はない。
+そういうことができるライブラリがあるか調べたけど、一応あるっぽい。
+
+<EmbedLink url="https://github.com/FirebaseExtended/reactfire" />
+
+ただこれはProviderでsuspenseをtrueにする必要があって、当初発表されたいわゆる0か1かのConccurent “mode”に対応しているインターフェースな気がした。
+既存プロジェクトで既にfirebaseをガッツリ使っていて、部分的にSuspenseに置き換えていくみたいな使い方だと厳しそうという判断。
+
+react-queryとかのフェッチング系ライブラリ使ってもできそうだったが、プロジェクトに入ってないしそのために入れるのもなーという感じ。
+ということで、そういった局所的な場面で使えるラッパー関数を作ってみた。
+
+## documentの取得をSuspenseを使って行う
+
+作り方は以下のリンクを大いに参考にした。
+非常に参考になった。ありがたい。
+
+<EmbedLink url="https://zenn.dev/uhyo/books/react-concurrent-handson/viewer" />
+
+関数を自作するにあたって以下のことが満たせればよさそう。
+
+・fetch中はPromiseをthrowする
+・fetch完了したらresolveしてデータをキャッシュに保持する
+・関数が呼ばれたときにキャッシュがあればキャッシュを返す、なかったらfetchする処理の分岐をする
+
+SDKではクエリやドキュメントの取得ができるが、今回はとりあえずドキュメントの取得のみ行う。
+
+結論、以下のようにするとうまく実装できた。
+
+```tsx
+import { getDoc, DocumentData, DocumentReference } from 'firebase/firestore'
+
+const documentCacheMap = new Map<string, DocumentData | null>()
+
+export function useDocumentSuspense<T extends DocumentData>(
+  documentReference: DocumentReference<T>,
+): T | null {
+  const cached = documentCacheMap.get(documentReference.path)
+  if (cached !== undefined) return cached as T | null
+
+  throw new Promise(resolve => {
+    getDoc(documentReference).then(e => {
+      const data = e.data({ serverTimestamps: 'estimate' }) || null
+      documentCacheMap.set(documentReference.path, data)
+      resolve(data)
+    })
+  })
+}
+```
+
+1つずつ見ていく。
+
+### 取得したデータの状態管理
+
+まず、取得したデータはdocumentCacheMapにドキュメントのpathと紐づけてMapで管理する。
+
+```tsx
+// ドキュメントのpathに紐づけてデータを格納する
+const documentCacheMap = new Map<string, DocumentData | null>()
+```
+
+ここがグローバルステートになってしまうのが、何とも歯がゆいが先ほどのリンク先でもstate管理はできないのでこうするしかないと言及してあったので諦める。
+
+### キャッシュの使用
+
+関数が呼ばれたときにはキャッシュを取得してそれがあればそれを返すだけ。
+
+```tsx
+const cached = documentCacheMap.get(documentReference.path)
+if (cached !== undefined) return cached as T | null
+```
+
+### データの取得処理
+
+ここが目玉。
+キャッシュがなかったら(undefinedだったら)、Promiseをthrowする。
+
+```tsx {1,5}
+throw new Promise(resolve => {
+  getDoc(documentReference).then(e => {
+    const data = e.data({ serverTimestamps: 'estimate' }) || null
+    documentCacheMap.set(documentReference.path, data)
+    resolve(data)
+  })
+})
+```
+
+そしてその中でデータの取得を行なって、取得したデータをキャッシュにセットしている。
+ここではresolveした値は使わないので何でもいいと思うが、取得したデータをresolveしている。
+resolveはSuspenseにデータの取得が終わったことを知らせるためだけに行なっているという認識。
+
+データを取得した結果、データがなかった場合は3行目でnullをセットするようにしている。
+そのため、キャッシュがnullだった場合はnullを返す。
+データがない = エラーの場合、そのエラーハンドリングはこの関数を呼び出す側の責務とした。
+
+これでデータの取得中はPromiseをthrowして、取得完了したらデータをキャッシュしてキャッシュデータを返すという関数を自作できた。
+
+## 取得したデータの更新を行う
+
+ここまでで自作した関数を使うと単純にfetchする分にはいいが、途中でそのデータを更新した際はキャッシュに保持されているデータが古いままなので古いデータを返し続ける。
+
+なのでデータ更新時に以下のような関数でキャッシュを更新してやれば一応問題なくなりはする。
+
+```tsx
+export function updateCacheMap<T extends DocumentData>(
+  documentReference: DocumentReference<T>,
+  data: T,
+): void {
+  documentCacheMap.set(documentReference.path, data)
+}
+```
+
+ただこれだとupdateするたびにこの関数を呼び出してキャッシュを更新する必要があって手続的で非常に微妙。。
+何よりキャッシュの更新し忘れをしそうで怖い。
+
+FirebaseのSDKに限らず、この辺を普遍的に解決する方法はあるのだろうか。
+やっぱりフェッチング系のライブラリ使って更新はそこから吐き出されたものを使うようにするとかかなー。。
+この辺詳しい人いたら教えてください。
+
+この方法だと上記の課題は解決が難しい気がしたので、Firebaseのsnapshotを使ったsubscribeをSuspenseで行うこととした。
+
+## subscribeしつつSuspenseする
+
+Firebaseにはあるドキュメントのsnapshotを取得しておき、それをsubscribeしてfirestore側に変更があったらその変更をsnapshotに反映させる機構がある。
+
+これによってfirestoreの変更を検知してクライアントに最新データを反映させることができる。
+これを使えばキャッシュを保持しつつ、firestoreに変更があった場合にはそれを検知してキャッシュを更新する処理を書くことができそう。
+
+これまでの要件に加えて、以下のような要件が必要となる。
+
+・ドキュメントのsubscribeを行い、firestoreに変更があった時にはキャッシュを最新のものに変更する
+・documentReferenceのpathが変更した場合は変更前にsubscribeしていたものをunsubscribeする
+・コンポーネントのアンマウント時にもunsubscribeする
+
+subscribeしてキャッシュを最新に保つことと、必要なくなった段階できちんとsubscribeしていたものをunsubscribeすることが必要となる。
+
+それを実現したのが以下のもの。
+
+```tsx
+import { onSnapshot, DocumentData, DocumentReference, Unsubscribe } from 'firebase/firestore'
+import { useRef, useEffect } from 'react'
+
+const documentCacheMap: Map<string, DocumentData | null> = new Map()
+const unsubscribeMap: Map<string, Unsubscribe> = new Map()
+
+export function useDocumentSuspense<T extends DocumentData>(
+  documentReference: DocumentReference<T>,
+): T | null {
+  const path = useRef('')
+
+  useEffect(() => {
+    path.current = documentReference.path
+
+    return () => {
+      unsubscribeMap.get(path.current)?.()
+      documentCacheMap.delete(path.current)
+    }
+  }, [documentReference.path])
+
+  const data = documentCacheMap.get(documentReference.path)
+  if (data !== undefined) return data as T | null
+
+  throw new Promise(resolve => {
+    const unsubscribe = onSnapshot(documentReference, snapshot => {
+      unsubscribeMap.set(documentReference.path, unsubscribe)
+      const data = snapshot.data({ serverTimestamps: 'estimate' }) || null
+      documentCacheMap.set(documentReference.path, data)
+      resolve(data)
+    })
+  })
+}
+```
+
+1つずつ見ていく。
+
+### 取得したデータの状態管理
+
+先ほどデータをグローバルステートにキャッシュとして格納していたが、今回はそれに追加してunsubscribeするための関数もグローバルステートに保管している。
+これもデータ同様ドキュメントのpathに紐づけている。
+
+```tsx {2}
+const documentCacheMap: Map<string, DocumentData | null> = new Map()
+const unsubscribeMap: Map<string, Unsubscribe> = new Map() // 追加
+```
+
+### データ取得処理
+
+キャッシュデータを返す部分は同じで実際にデータを取得する部分は以下の通り。
+
+```tsx {2,3}
+throw new Promise(resolve => {
+  const unsubscribe = onSnapshot(documentReference, snapshot => {
+    unsubscribeMap.set(documentReference.path, unsubscribe)
+    const data = snapshot.data({ serverTimestamps: 'estimate' }) || null
+    documentCacheMap.set(documentReference.path, data)
+    resolve(data)
+  })
+})
+```
+
+データをセットする部分は変更ないが、unsubscribe関数もここでセットしている。
+onSnapshotの返り値がUnsubscribeなのでそれをunsubscribeMapにセットする。
+ここも本来はstate管理したいができないので仕方なくグローバルステートにしている。
+
+### unsubscribe処理
+
+あとはuseEffect内でunsubscribeするための処理を書いている。
+
+```tsx {4,7-8}
+const path = useRef('')
+
+useEffect(() => {
+  path.current = documentReference.path
+
+  return () => {
+    unsubscribeMap.get(path.current)?.()
+    documentCacheMap.delete(path.current)
+  }
+}, [documentReference.path])
+```
+
+useRefを使ってドキュメントのpathを管理しておき、pathが変更するたびにrefの値も変更する。
+unsubscribe関数自体はstate管理できなかったが、useEffect内でuseRefにpathを格納しておくことでそのpathから変更前のpathのunsubscribe関数を取得できるようにしているのがミソ。
+
+<Message type="tips">
+useStateではなくuseRefにしているのは、useStateだとクリーンアップ関数が呼ばれた時点で初期化されてしまっていてpathを保持しておけないため。
+</Message>
+
+unsubscribeする時には同時にそのpathのキャッシュデータも削除しておく。
+そうしないと一度unsubscribeした後にもう一度subscribeしようとしてこのカスタムフックを呼び出しても、キャッシュが残っているとsubscribeされずにキャッシュデータを返すのでデータが古いものを取得する可能性があるため。
+
+以上で望み通りの要件を満たすカスタムフックを作成できた。
+もう一度完成形を載せておく。
+
+```tsx
+import { onSnapshot, DocumentData, DocumentReference, Unsubscribe } from 'firebase/firestore'
+import { useRef, useEffect } from 'react'
+
+const documentCacheMap: Map<string, DocumentData | null> = new Map()
+const unsubscribeMap: Map<string, Unsubscribe> = new Map()
+
+export function useDocumentSuspense<T extends DocumentData>(
+  documentReference: DocumentReference<T>,
+): T | null {
+  const path = useRef('')
+
+  useEffect(() => {
+    path.current = documentReference.path
+
+    return () => {
+      unsubscribeMap.get(path.current)?.()
+      documentCacheMap.delete(path.current)
+    }
+  }, [documentReference.path])
+
+  const data = documentCacheMap.get(documentReference.path)
+  if (data !== undefined) return data as T | null
+
+  throw new Promise(resolve => {
+    const unsubscribe = onSnapshot(documentReference, snapshot => {
+      unsubscribeMap.set(documentReference.path, unsubscribe)
+      const data = snapshot.data({ serverTimestamps: 'estimate' }) || null
+      documentCacheMap.set(documentReference.path, data)
+      resolve(data)
+    })
+  })
+}
+```
+
+ここまでやってきてだいぶ自分が欲しいと思えるものが実装できたので非常に満足である。
+
+ただこれでもまだ不十分な部分はある。
+
+**subscribeしてるのでdocumentCacheMapの値は随時更新されるが、state管理していないので値が更新されたとしてもそれによるコンポーネントの再レンダリングは行われない。**
+
+つまり、別の何らかの方法で再レンダリングされるまではその値はコンポーネントに反映されない。
+
+挙動確認はしていないが、これはsubscribeに限らず手続的にキャッシュを更新した場合でもおそらく同様だと思う。
+データをstateで管理していない以上ここは妥協せざるをえないのかなと現時点では思っているが、本当にこれができない設計になってるのか？という気がしてならないのでおそらく自分が知らない仕様があるだけな気がする。
+
+できる方法があったら教えてください。
+
+もう一つ懸念点。
+
+2つのコンポーネントで同じドキュメントのpathでこのカスタムフックが呼ばれた場合、片方のコンポーネント(後からレンダリングした方？)のunsubscribe関数だけがunsubscribeMapに保管される。
+(正確にはデータもだがデータは共通なので問題ない)
+
+この状況でどちらか一方のコンポーネントがアンマウントされればunsubscribeされてキャッシュデータも削除される。
+いずれのコンポーネントがアンマウントされたとしても、残っているコンポーネントはsubscribeできずキャッシュデータも削除された状態になってしまう。
+
+今回はこういうのはエッジケースとして無視することとしたが、アプリの作り的にアウトな場合は使えないかもしれない。
+そもそもドキュメントのpathに紐づけてキャッシュを管理するのではなく、マウントしたコンポーネントごとにuuidみたいなのを発行してそれに紐づけるようにすればいけそうな気もするが試してないのでわからない。
+
+他にいい方法あったら教えてください。
+
+また、全体的に今回実装した内容よりもいい方法があれば教えてください。
+
+## まとめ
+
+目的のカスタムフックを実装する上でsubscribeやunsubscribe、SuspenseでのPromiseの扱い方、state管理など非常に学びが多かった。
+useEffectのクリーンアップ関数についても理解が深まったと思う。
+
+出来上がったものに関しては不完全な部分もあるが、一旦目的のものは実装できたので満足。
+
+最近こういう自作関数みたいなの作るの楽しいなと思う。
+
+この辺いい感じにできるライブラリ探してなかったので、こういう薄いラッパー関数的なやつをライブラリとして自作してみようかと思っている。
+
+## 参考
+
+<EmbedLink url="https://zenn.dev/uhyo/books/react-concurrent-handson/viewer" />
