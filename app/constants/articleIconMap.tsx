@@ -16,7 +16,9 @@ import { NodeJSIcon } from "@/components/parts/icons/NodeJS"
 import { PlaywrightIcon } from "@/components/parts/icons/Playwright"
 import { PrismaIcon } from "@/components/parts/icons/Prisma"
 import { ReactIcon } from "@/components/parts/icons/React"
+import { StorybookIcon } from "@/components/parts/icons/Storybook"
 import { TypeScriptIcon } from "@/components/parts/icons/TypeScript"
+import { ViteIcon } from "@/components/parts/icons/Vite"
 import { VitestIcon } from "@/components/parts/icons/Vitest"
 import type { JSX } from "hono/jsx/jsx-runtime"
 
@@ -26,10 +28,12 @@ export type ArticleIconKey =
   | "TypeScript"
   | "React"
   | "Next.js"
+  | "Storybook"
   | "NestJS"
   | "Node.js"
   | "prisma"
   | "ESLint"
+  | "Vite"
   | "Vitest"
   | "Playwright"
   | "Go"
@@ -54,10 +58,12 @@ export const ArticleIconMap = new Map<
   ["TypeScript", TypeScriptIcon],
   ["React", ReactIcon],
   ["Next.js", NextJSIcon],
+  ["Storybook", StorybookIcon],
   ["NestJS", NestJSIcon],
   ["Node.js", NodeJSIcon],
   ["prisma", PrismaIcon],
   ["ESLint", ESLintIcon],
+  ["Vite", ViteIcon],
   ["Vitest", VitestIcon],
   ["Playwright", PlaywrightIcon],
   ["Go", GoIcon],
