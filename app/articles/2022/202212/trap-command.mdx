@@ -1,0 +1,110 @@
+---
+title: trapコマンドを使ってプロセス終了時に特定のファイルを削除する
+ogImageTitle: trapコマンドを使って,プロセス終了時に,特定のファイルを削除する
+description: trapコマンドを使って、特定のプロセスが終了したのを検知して特定のファイルを削除できるようにした。
+tags: Linux
+icon: Linux
+publishedAt: 2022/12/18
+updatedAt: 2022/12/18
+---
+
+特定のプロセスが終了したのを検知して、その時に特定のファイルを削除したいという要件が出てきた。
+
+trapコマンドを使うとスッキリ書けていい感じにできるよと教えてもらったのでメモしておく。
+
+最初に必要になった背景から記載するが、興味ない場合は「[2\. trapコマンドを使う](https://www.sunapro.com/trap-command/#index_id1)」までスキップ
+
+## 背景
+
+MSWをプロダクトに導入した。
+
+<EmbedLink url="https://mswjs.io/" />
+
+これセットアップのために以下のコマンドを叩く必要があって、そうすると`public`ディレクトリ配下に`mockServiceWorker.js`というworker起動用のスクリプトが自動生成される。
+
+```bash
+npx msw init public/ --save
+```
+
+このファイル自体は特に触ることはないんだが、こんな気になる一文が書いてあった
+
+> Please do NOT serve this file on production.
+
+`public`ディレクトリ配下に作られるのに本番環境にserveするなとは…
+とか思いつつ、まあ出力先変えられるっぽいしそれで対応するかと思ったんだが、MSW起動時だけそのファイルが作られるようにすればいいよと教えてもらったのでそれを実現したってのが本記事の主旨。
+
+つまり今回やりたいことは以下のようになる
+
+- `npm scripts`でMSWと共に開発サーバーを起動するコマンドを用意する
+- そのコマンド実行時に`mockServiceWorker.js`を作成する
+- サーバー起動しているプロセスが終了した時に`mockServiceWorker.js`を削除する
+
+問題は最後の工程である。
+プロセス終了を検知するってどうやってやるんだ…
+
+この工程をもう少し抽象化すると、「特定のシグナル(今回はプロセス終了)を検知して、特定のコマンドを実行する」である
+
+これを実現するのがtrapコマンドだった
+
+## trapコマンドを使う
+
+先述した通り、trapコマンドは特定のシグナルを検知して、特定のコマンドを実行できる。
+
+trapコマンドの主な使い方は以下の通りである
+
+```bash
+trap [実行したいコマンド] [シグナル]
+```
+
+今回はプロセス終了のシグナルを検知してファイル削除したいので、以下のようなコマンドを作った。
+
+```bash
+trap 'rm public/mockServiceWorker.js' EXIT
+```
+
+肝心の部分が作れたので、改めて今回欲しかったスクリプトの全体を書くと以下のようになった
+
+```json
+"dev": "next dev",
+"dev:mock": "NEXT_PUBLIC_USE_MSW=true trap 'rm public/mockServiceWorker.js' EXIT; msw init ./public && next dev",
+```
+
+`dev:mock`の時には環境変数を設定してサーバーを起動させている。
+trapコマンドの部分とその後のスクリプトは連続して実行したいので`;`で繋いでる。
+サーバー起動前に`msw init ./public --save`している。
+
+これでプロセス終了したらファイルは削除されてクリーンになる。
+
+## おまけ
+
+これ書いた後にMSWのissueで同じような悩みのものを見つけた
+
+<EmbedLink url="https://github.com/mswjs/msw/issues/291" />
+
+ここに書いてある方法は`prebuild`でbuildする前に該当ファイルを削除すればいいよってこと
+確かにそれでも良かったなーと思いながら、まあ`npm scripts`使ってbuildした場合は意味なくなっちゃうし(そんなケースあるか…？)と思ってまあ今回の方法でいいやってなった
+
+あとメンテナーの人がこんな感じで書いてて、んーその温度感なら`Please do NOT serve this file on production.`はちょっと語気強くない？wと思ったがまあserveしないに越したことはないな
+
+> However, since the worker script is in the public directory, it most likely gets copied to the built version of the application as well. While this has no negative effect on its own (considered you’ve enabled mocking conditionally in your application’s code), it still introduces an unused build file, which may get confusing.
+> 
+> *https://github.com/mswjs/msw/issues/291*
+
+あと今回のに限らずなんだけど、issueとかのコメントに対して👍はわかるが、👎を見るとなんか悲しくなるw
+😕とかならわかるんだけどこの辺もうちょいなんとかならんのかなーと個人的には思うんだが、GitHubの人その他ユーザーは別になんとも思わんのかなー
+
+## まとめ
+
+シェルスクリプト普段全然使わないからそもそもどういうのがあるのかすらわからぬ
+
+一覧ざっと見ておくだけでも引き出し増えそうだなーとは思うものの多分無機質であんま頭に入らなさそう
+
+とりあえず使ったものからちゃんと引き出しに入れてこう
+
+## 参考
+
+<EmbedLink url="https://atmarkit.itmedia.co.jp/ait/articles/1907/25/news010.html" />
+
+<EmbedLink url="https://mswjs.io/" />
+
+<EmbedLink url="https://github.com/mswjs/msw/issues/291" />

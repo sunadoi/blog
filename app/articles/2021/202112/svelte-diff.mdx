@@ -1,0 +1,202 @@
+---
+title: Svelteの差分検知方法
+ogImageTitle: Svelteの差分検知方法
+description: Svelteの差分検知方法がどうなってるのか気になったので調べてまとめた。
+tags: Svelte
+icon: Svelte
+publishedAt: 2021/12/18
+updatedAt: 2021/12/18
+---
+
+前回仮想DOMについて学び直したことをまとめた記事を書いた
+
+<EmbedLink url="https://suna.dev/articles/virtual-dom" />
+
+Svelteは仮想DOMを使っていないことで有名だが、仮想DOMを使わないでどうやって部分的な変更を検知してリアルDOMに反映してるんだろうってのが気になったので色々調べてみたことのまとめと、実際に触ってみた所感を記しておく。
+
+## Svelteとは？
+
+SvelteはJSの**コンパイラ**である。
+フレームワークでもなくライブラリでもなくコンパイラであるってのが最初驚きだった。
+
+Svelteが注目されるようになったのは大きく作りなおされたv3以降らしいので、この記事でもv3以降を前提とする。
+
+ドキュメントに記載されている主な特徴は次の3つ。
+
+・少ないコードで記述ができる
+・仮想DOMがない
+・リアクティブなコードが簡単に書ける
+
+### 少ないコードで記述ができる
+
+ReactやVueと比較して少ないコードで記述できることが強みである。
+
+```svelte
+<script>
+  let a = 1;
+</script>
+
+<input type="number" bind:value={a}>
+<p>{a}</p>
+```
+
+なんとなく書き方がvueっぽい。
+変数だったりロジックだったりJS的な部分は全てscriptタグに集約される
+
+データは`bind:value`でbindされる。
+vueのv-modelのさらに簡易バージョンみたいな印象。
+
+### 仮想DOMがない
+
+そして今回の主題でもあるが、仮想DOMがない。
+
+この点に関しては詳細は後述するが、これらのことができるのもSvelteがコンパイラであるがゆえであり、ReactやVueがブラウザで変更すべきDOMの差分検知を行なっていたステップを、Svelteではコンパイル時に変更する可能性のあるDOMや値を検知するようにしたことで可能になったという認識でいる。
+当然、ブラウザで差分検知するために必要だったオーバーヘッドコードは必要なくなるため、Svelteは軽量かつ高速に動作することができるようになっている。
+
+### リアクティブなコードが簡単に書ける
+
+仮想DOMがないというのとも関連するが、コンパイルして吐き出したJSファイル内に値の変更を検知してDOMに反映させるための記述が内包されているため、値(state)の管理がシンプルになり簡単に記述できるようになる。
+
+## 仮想DOMはオーバーヘッドという考え方
+
+前回の仮想DOMの記事で、「仮想DOMを使ってもその後リアルDOMに反映させるなら、仮想DOMの計算部分はオーバーヘッドになるのではないか？」みたいなことを書いたが、まさにこの考え方がSvelteが仮想DOMをオーバーヘッドと考えているものと同じだった
+
+<EmbedLink url="https://svelte.dev/blog/virtual-dom-is-pure-overhead" />
+
+ReactとSvelteを比較した以下の記事にある図がわかりやすかった
+
+<EmbedLink url="https://blog.bitsrc.io/react-vs-sveltejs-the-war-between-virtual-and-real-dom-59cbebbab9e9" />
+
+![svelteとreactの比較図](/assets/article/svelte-diff/svelte-vs-react.webp)
+
+Reactでは仮想DOMによる差分検知とそれをリアルDOMに反映させるステップがランタイムで行われるのに対し、Svelteではコンパイル時に変換されたJSによって直接DOMを書き換えるようになっている。
+当然、ランタイムで差分検知する必要がある以上オーバーヘッドになるコードが存在することになり、これが仮想DOMによるステップがオーバーヘッドであるという思想。
+
+### コンパイル時に差分検知する方法
+
+Svelteはどの値が変化するかをコンパイル時に検知し、それをDOMに反映するコードを生成する。
+言ってる意味はわかるんだけどそれどうやってるん？ってのが気になって調べようと思ったのがこの記事を書く動機だった。
+
+メンテナーの人が書いてるこの記事読めば何となく理解できた。
+
+<EmbedLink url="https://lihautan.com/compile-svelte-in-your-head-part-1/" />
+
+svelteではコンパイル時にcreate\_fragmentというSvelte componentを作成するための要素が作成され、その中にDOMの情報が書き込まれる。
+
+scriptやhtmlタグで書いたコードは以下のようにコンパイルされる。
+
+```svelte {8,12}
+<script>
+	let name = 'World';
+</script>
+<h1>Hello {name}</h1>
+
+/* --- コンパイル後 --- */
+
+let name = "World";
+
+// create_fragment内
+h1 = element('h1');
+h1.textContent = ` Hello ${name}`;
+```
+
+ここでscriptで定義した変数nameはコンパイル後、トップレベルの変数として扱われている。
+また、そのnameは`` h1.textContent = `Hello ${name}` ``として値が代入される形になっている。
+
+以下は、先ほどのコードを拡張してクリックイベントによって変数が変更されるリアクティブなコードにしたもの。
+
+```svelte {14-15,17-24}
+<script>
+	let name = 'World';
+	function update() {
+		name = 'Svelte';
+	}
+</script>
+<button on:click={update}></button>
+<h1>Hello {name}</h1>
+
+/* --- コンパイル後 --- */
+
+// create_fragment内
+h1 = element("h1");
+t1 = text("Hello ");
+t2 = text(/*name*/ ctx[0]);
+
+// instance関数
+function instance($$self, $$props, $$invalidate) {
+	let name = "World";
+	function update() {
+		$$invalidate(0, name = "Svelte");
+	}
+	return [name, update];
+}
+```
+
+変更点を順番に見ていく。
+
+まず、先程scriptで定義した変数はトップレベルに書かれていたが、今度はinstance関数の中に書かれるようになった。
+ここで`$$invalidate(0, name = "Svelte")`という箇所でnameの値が書き換えられる処理が加えられている。
+
+また、先程までnameの値はそのまま代入される形になっていたが、今回は変更される可能性のない`t1 = text("Hello ");`と変更されうる`t2 = text(/_name_/ ctx[0]);`に分けられている。
+`ctx[0]`の部分が`$$invalidate(0, ...)`の部分と対応しているのだと認識した。
+
+svelteではこのようにリアクティブに変更される部分とされない部分をコンパイル時に分けるようにしているらしい。
+
+svelteはコンパイル時にscriptタグ内の全ての変数について、それが変わりうるかどうかを判断している。
+そして変わりうるのであればそれを`$$invalidate`と`ctx`で繋げられるようにしてるのだと解釈した。
+
+> The Svelte compiler tracks all the variables declared in the \<script> tag.
+> 
+> It tracks whether the variable:
+> 
+> ・can be mutated? eg: count++,
+> 
+> ・can be reassigned? eg: name = ‘Svelte’,
+> 
+> ・is referenced in the template? eg: `<h1>Hello {name}</h1>`
+> 
+> ・is writable? eg: `const i = 1;` vs `let i = 1;`
+> 
+> ・… and many more
+> 
+> *https://lihautan.com/compile-svelte-in-your-head-part-1/#create-fragment*
+
+調べる前まではめちゃくちゃ複雑なことやってるのかなと思ってたけど、意外にもシンプルな作りだったので驚いた(内部の処理は大変そうではあるが)
+
+instance関数の状態管理とctxの関係とかもっと深堀れば色々知れそうだけど、今回は仮想DOMを使わないでどうやって部分的な差分検知をしているのかが気になって調べたという主旨なのでここまでにしておく。
+
+## 所感
+
+ReactやVueと比較した時の特徴は色んなところで記事があるのでここでは省略するが、調べて触ってみた上での個人的な所感を雑多に記しておく。
+
+### Pros
+
+個人的にいいなと思ったのは標準でlintの機能があったり、アクセシビリティのチェックとかもやってくれるということ。
+もちろんバンドルサイズが小さくなるのも嬉しい。
+
+### Cons
+
+`on:click`とか`#if`みたいな独自のシンタックス使わなければならないのはなんか微妙だなと思った。
+短い記述で書けることを押し出しているが、そのために独自のシンタックス使うのは嫌だなーと思ったので普通にJSで書かせてくれと思った。笑
+
+あと色んな記事でも書かれてるけどコミュニティとかエコシステムが成熟してないのは開発する上で辛そう。
+小さい規模で要件が複雑じゃないものを早さ重視で作るのには適しているのかもしれないが、大きめの規模のアプリケーションで使うには色々不便な面が出てきそうな気がした。
+
+### 流行りそう？
+
+仮想DOMがオーバーヘッドってのは理論的にはよくわかるし、それに対するSvelteのアプローチも納得できるものではある。
+ただ、実際にパフォーマンス面でそのオーバーヘッド分が気になるケースってどれ程あるのだろうとシンプルに疑問だった。
+この辺のパフォーマンス測定したことないからどれだけ無駄があるのかよくわかってない。
+バンドルサイズ小さいという利点はあるがpreactとか使えばそこは解決しそうだし。
+
+## まとめ
+
+svelteはJSのコンパイラってのが最初驚きだったけど、コンパイラならではの良さを活かして最小限のコードで色んな処理ができるように作られている印象だった。
+
+最近ツールやフレームワークの思想とかそれに基づく内部の仕組みを調べるのが楽しい。
+
+svelteは個人的には使ってこうという機運は高まってないが、今ある仮想DOMが最善ではないよねって思想で改善していこうとする姿勢は好感が持てた。
+
+## 参考
+
+<EmbedLink url="https://blog.bitsrc.io/react-vs-sveltejs-the-war-between-virtual-and-real-dom-59cbebbab9e9" />

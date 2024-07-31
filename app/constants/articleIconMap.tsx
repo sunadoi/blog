@@ -1,4 +1,6 @@
 import { AWSIcon } from "@/components/parts/icons/AWS"
+import { CloudflareIcon } from "@/components/parts/icons/Cloudflare"
+import { CloudflareWorkersIcon } from "@/components/parts/icons/CloudflareWorkers"
 import { DBIcon } from "@/components/parts/icons/DB"
 import { DockerIcon } from "@/components/parts/icons/Docker"
 import { ESLintIcon } from "@/components/parts/icons/ESLint"
@@ -9,6 +11,7 @@ import { GitHubIcon } from "@/components/parts/icons/GitHub"
 import { GitHubActionsIcon } from "@/components/parts/icons/GitHubActions"
 import { GoIcon } from "@/components/parts/icons/Go"
 import { JavaScriptIcon } from "@/components/parts/icons/JavaScript"
+import { LinuxIcon } from "@/components/parts/icons/Linux"
 import { MySQLIcon } from "@/components/parts/icons/MySQL"
 import { NestJSIcon } from "@/components/parts/icons/NestJS"
 import { NextJSIcon } from "@/components/parts/icons/NextJS"
@@ -16,7 +19,9 @@ import { NodeJSIcon } from "@/components/parts/icons/NodeJS"
 import { PlaywrightIcon } from "@/components/parts/icons/Playwright"
 import { PrismaIcon } from "@/components/parts/icons/Prisma"
 import { ReactIcon } from "@/components/parts/icons/React"
+import { RenovateIcon } from "@/components/parts/icons/Renovate"
 import { StorybookIcon } from "@/components/parts/icons/Storybook"
+import { SvelteIcon } from "@/components/parts/icons/Svelte"
 import { TypeScriptIcon } from "@/components/parts/icons/TypeScript"
 import { ViteIcon } from "@/components/parts/icons/Vite"
 import { VitestIcon } from "@/components/parts/icons/Vitest"
@@ -28,6 +33,7 @@ export type ArticleIconKey =
   | "TypeScript"
   | "React"
   | "Next.js"
+  | "Svelte"
   | "Storybook"
   | "NestJS"
   | "Node.js"
@@ -36,6 +42,8 @@ export type ArticleIconKey =
   | "Vite"
   | "Vitest"
   | "Playwright"
+  | "Cloudflare"
+  | "Cloudflare Workers"
   | "Go"
   | "MySQL"
   | "Docker"
@@ -45,9 +53,11 @@ export type ArticleIconKey =
   | "GitHub"
   | "GitHub Actions"
   | "Git"
+  | "Linux"
   | "設計"
   | "DevOps"
   | "データ"
+  | "Renovate"
 
 export const ArticleIconMap = new Map<
   ArticleIconKey,
@@ -58,6 +68,7 @@ export const ArticleIconMap = new Map<
   ["TypeScript", TypeScriptIcon],
   ["React", ReactIcon],
   ["Next.js", NextJSIcon],
+  ["Svelte", SvelteIcon],
   ["Storybook", StorybookIcon],
   ["NestJS", NestJSIcon],
   ["Node.js", NodeJSIcon],
@@ -66,6 +77,8 @@ export const ArticleIconMap = new Map<
   ["Vite", ViteIcon],
   ["Vitest", VitestIcon],
   ["Playwright", PlaywrightIcon],
+  ["Cloudflare", CloudflareIcon],
+  ["Cloudflare Workers", CloudflareWorkersIcon],
   ["Go", GoIcon],
   ["MySQL", MySQLIcon],
   ["Docker", DockerIcon],
@@ -75,7 +88,9 @@ export const ArticleIconMap = new Map<
   ["GitHub", GitHubIcon],
   ["GitHub Actions", GitHubActionsIcon],
   ["Git", GitIcon],
+  ["Linux", LinuxIcon],
   ["設計", "📐"],
   ["DevOps", "⚙️"],
   ["データ", DBIcon],
+  ["Renovate", RenovateIcon],
 ])

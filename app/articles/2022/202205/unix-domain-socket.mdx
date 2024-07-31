@@ -1,0 +1,93 @@
+---
+title: unixドメインソケット
+ogImageTitle: unixドメインソケット
+description: unixドメインソケットがどういうものか調査した内容を記載。
+tags: Linux,Go
+icon: Linux
+publishedAt: 2022/05/25
+updatedAt: 2022/05/25
+---
+
+Nginxとアプリケーションサーバーの接続でunixドメインソケットが使われていた。
+実務でこれまでこの辺のミドルウェアは触れることがなかったのでいい勉強になったということで軽くまとめておく。
+
+## unixドメインソケットとは
+
+通常のソケット通信はネットワークを介してプロセス間通信を行うのに対し、unixドメインソケットはファイルシステムを介してプロセス間通信を行うもの。
+
+カーネル内部で完結するため、ネットワーク経由の場合と比較して非常に高速であるが、外部インターフェースへの接続はできない。
+そのため、接続するものは同一ホスト上に存在する必要がある。
+
+複数コンテナ間で通信する際もdockerのContainer link使うよりunixドメインソケット使った方が高速らしい。
+
+<EmbedLink url="https://qiita.com/ma2shita/items/6f1905847b2059f7cf7d" />
+
+## GoサーバーとNginxとの接続
+
+今回はGoのサーバーとNginxをunixドメインソケットを使って接続した
+
+詳細は省くが、nginxの設定ファイルで以下のように記述することで、接続用のファイルを`/tmp/go.sock`に配置する。
+
+```nginx title="nginx.conf"
+upstream go {
+  server unix:/tmp/go.sock fail_timeout=0;
+}
+```
+
+go側の記述でこの`/tmp/go.sock`をlistenするように記述する。
+今回はフレームワークとしてechoを使った。
+
+```go
+socket_file := "/tmp/go.sock"
+l, err := net.Listen("unix", socket_file)
+if err != nil {
+	e.Logger.Fatal(err)
+}
+
+if err := os.Chmod(socket_file, 0744); err != nil {
+	e.Logger.Fatal(err)
+}
+
+e.Listener = l
+e.Logger.Fatal(e.Start(""))
+```
+
+`net.Listen`で`unix`としてソケットファイルを渡してやればよい。
+それをlistenerとして登録して起動させるのみ。
+ファイルの実行権限を与える必要があるので`744`を設定している。
+
+### 開発時はポートで接続する
+
+本番環境ではnginxを使って接続をするが、開発環境では直接ポートを使って接続したい。
+なので環境変数を使ってこれらを振り分けるようにした。
+先程のソケット通信の処理の前に以下の処理を追加するだけ。
+あとは開発時は`GO_ENV`にdevelopmentを渡してサーバーを起動させるだけでok
+
+```go
+if os.Getenv("GO_ENV") == "development" {
+	e.Logger.Fatal(e.Start(":1323"))
+}
+```
+
+実際の起動の様子がこちら。
+
+```plaintext
+// portで接続した場合
+⇨ http server started on [::]:1323
+
+// unixドメインソケットで接続した場合
+⇨ http server started on /tmp/go.sock
+```
+
+ログでもちゃんと立ち上げ方が変わっているのがわかる。
+
+## まとめ
+
+unixドメインソケット名前しか知らなかった。
+使い方とその利点がわかって満足。
+
+## 参考
+
+<EmbedLink url="https://blog.kasei-san.com/entry/2020/09/02/175828" />
+
+<EmbedLink url="https://qiita.com/ma2shita/items/6f1905847b2059f7cf7d" />
