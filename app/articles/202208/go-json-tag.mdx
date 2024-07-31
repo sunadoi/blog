@@ -1,0 +1,340 @@
+---
+title: jsonタグ付きの構造体を生成する関数を自作する
+ogImageTitle: jsonタグ付きの構造体を生成する関数を自作する
+description: jsonタグ付きの構造体を生成する関数の作成方法について。
+tags: Go
+icon: Go
+publishedAt: 2022/08/29
+updatedAt: 2022/08/29
+---
+
+Goでクリーンアーキテクチャを採用していて、controller層でレスポンスを返すようにしているのだがdomain層で定義した構造体をそのまま返すとjsonタグが付与されていないのでレスポンスのjsonのキーがPascalCaseになってしまって困った。
+
+domain層でjsonタグを付与するのも責務的に嫌だなと思い、かといってcontroller層で新しく構造体定義するのも冗長だなと思って、jsonタグを勝手に付与してくれる関数があれば便利だなと思って作ってみた。
+
+結論、それっぽいものができたのだがプロダクションコードとして使うには若干躊躇われる完成度だったので使っていない。
+
+とはいえそのまま葬るのも惜しいので、ここで供養しておく。
+
+## 背景
+
+たとえば以下のような構造体をdomain層で定義しているとする。
+
+```go
+type User struct {
+  ID   int
+  Name string
+}
+```
+
+これをcontroller層でそのままレスポンスするとjsonのキーはPascalCaseになってしまう。
+本当はsnake\_caseになってほしい。
+
+```go
+// 実際のレスポンス
+{
+  "ID": 1,
+  "Name": "foo",
+}
+
+// 期待するレスポンス
+{
+  "id": 1,
+  "name": "foo",
+}
+```
+
+これを実現するためには大きく分けて方針が以下の2つあると思っている。
+① domain層の構造体にjsonタグを付与する
+② controller層でjsonタグ付きの構造体を用意し、レスポンスする前にdomain層の構造体から入れ替える
+
+いずれにせよ、jsonで返した時のキーを変更したいのであれば、構造体にjsonタグが必要になるという認識でいる。
+①の方針だと楽ではあるが、ドメインロジックとして使用する構造体なのに、レスポンスに関与するjsonタグを持っているのは責務的に微妙だなという気がしてならない。
+②だとcontrollerでの処理ごとにいちいち構造体を用意して入れ替える必要があり、記述が冗長になるデメリットがある。
+
+```go
+// domain層で定義
+type User struct {
+  ID   int
+  Name string
+}
+
+// controller層で定義
+type UserResponse struct {
+  ID   int     `json:"id"`
+  Name string  `json:"name"`
+}
+
+func (u *User) toResponse() *UserResponse {
+  return &{
+    ID:   u.ID,
+    Name: u.Name,
+  }
+}
+```
+
+Goの経験が豊富なわけではないので本当にこのやり方しかないのかという疑いが自分の中にあるが、今の自分の認識ではこんな感じで入れ替え作業をフィールドごとに愚直にやっていくのがメジャーという認識。
+
+このやり方だとそれぞれのレスポンスごとに、`FooResponse`みたいなjsonタグ付きの構造体と、その構造体への入れ替え作業を行う`toResponse`的な関数を用意する必要がある。
+
+そこで、domain層の構造体を渡すとキーバリューは全く同じだが、jsonタグ付きの構造体として返してくれる汎用的な関数があれば毎回このような構造体と関数を定義する必要がなくなって嬉しいのでは！？
+と思ったので作ってみた。
+
+## jsonタグ付きの構造体を返すAddJsonTag関数
+
+改めて今回作る関数の処理内容を記述すると、関数の中で新しくjsonタグ付きの構造体を作成してフィールドごとの値を入れ替えて返すというもの。
+
+GoではJSみたいに即時的にオブジェクト作って返すみたいなことができず、明示的に構造体を用意する必要があるので動的にこの構造体をどうやって用意するのか頭を悩ませた。
+
+結論、reflectパッケージを使えばそれっぽいものができた。
+reflectパッケージは型の情報を動的に取り扱ったりする時に使うもの。
+(reflectパッケージの詳細な使い方は本記事では説明しない。)
+
+```go
+func AddJsonTag[T comparable](target T) any {
+	rv := reflect.ValueOf(&target).Elem()
+	rt := rv.Type()
+	if rt.Kind() == reflect.Ptr {
+		rv = reflect.ValueOf(target).Elem()
+		rt = rt.Elem()
+	}
+
+	fields := make([]reflect.StructField, rt.NumField())
+	for i := 0; i < rt.NumField(); i++ {
+		field := rt.Field(i)
+		fields[i] = reflect.StructField{
+			Name: field.Name,
+			Type: field.Type,
+			Tag:  reflect.StructTag(`json:"` + toSnakeCase(field.Name) + `"`),
+		}
+	}
+
+	t := reflect.StructOf(fields)
+	v := reflect.New(t)
+	for i := 0; i < rt.NumField(); i++ {
+		v.Elem().Field(i).Set(rv.Field(i))
+	}
+
+	return v.Interface()
+}
+```
+
+大まかな流れは以下。
+① 受け取った構造体の引数からreflectのvalueとtypeをそれぞれ取り出す
+② jsonタグ付きの構造体である`[]reflect.StructField`を作成する
+③ 新たな構造体の`reflect.Value`を作成し、実際の値をセットする
+④ 作成した`reflect.Value`からinterfaceを作成して返す
+
+### 処理の詳細
+
+#### ① 受け取った構造体の引数からreflectのvalueとtypeをそれぞれ取り出す
+
+`reflect.ValueOf`を使って取り出せるのはValueのポインタ、`Elem()`で実際の値を取り出しているという認識。
+typeも一緒に取り出しておく。
+
+この時、引数にジェネリクスを使用してcomparableとした。
+これは`interface{}`にしておくと後々の操作で`reflect: NumField of non-struct type interface {}`というエラーが出たため。
+詳しくは後述する。
+
+ただしcomparableだと構造体でもポインタでも受け取れるようになってしまうので、上記3行目までだとポインターで渡した時に`ValueOf`の値がポインタのポインタになってしまい後の処理に影響が出る。
+`(reflect.Type).Kind()`で型を判別できるので、引数をポインタで受け取ったらそれをそのまま`ValueOf`に渡すようにしている。
+
+#### ② jsonタグ付きの構造体である`[]reflect.StructField`を作成する
+
+`(reflect.Type).NumField()`で構造体のフィールドの数を取得できるので、その数でループを回して一つずつフィールドを定義している。
+今回は型定義と値は同じものを使い、jsonタグだけ追加したいので7行目が重要な部分。
+
+```go {7}
+fields := make([]reflect.StructField, rt.NumField())
+for i := 0; i < rt.NumField(); i++ {
+	field := rt.Field(i)
+	fields[i] = reflect.StructField{
+		Name: field.Name,
+		Type: field.Type,
+		Tag:  reflect.StructTag(`json:"` + toSnakeCase(field.Name) + `"`),
+	}
+}
+```
+
+スネークケースに変換する関数部分も自作しているが、これは本題とずれるので後述。
+(`reflect.StructTag`にはGetメソッドが生えてるんだがSetはなかった。。。Setが生えてくれてたらこんな余計な操作しなくて済んだのになー)
+
+#### ③ 新たな構造体の`reflect.Value`を作成し、実際の値をセットする
+
+全てのフィールドにjsonタグを追加したものを作成した後、それから`reflect.StructOf`によって型情報を得る。
+その型情報をもとに`reflect.New()`すると`reflect.Value`が得られる。
+あとは先ほどと同様にフィールドの数だけループを回しながら得られた新しい`reflect.Value`に実際の値をセットしていく。
+
+```go
+t := reflect.StructOf(fields)
+v := reflect.New(t)
+for i := 0; i < rt.NumField(); i++ {
+	v.Elem().Field(i).Set(rv.Field(i))
+}
+```
+
+#### ④ 作成した`reflect.Value`からinterfaceを作成して返す
+
+最後に作成した`reflect.Value`からinterface型に戻して返す。
+
+```go
+return v.Interface()
+```
+
+reflectを使うとよくないのが、最終的に返す型が`interface{}`型になってしまうこと。
+型情報が失われてしまう。
+とは言ってもこの関数の場合、返したものをそのままjson表示させるだけなのであまり問題にならないかもしれないが。
+
+当初はreturnする際にキャストして返せば型情報失われなくていいかと思ったんだが、jsonタグが付与されているものとされていないものでは別の型として認識される？のか不明だが、キャストに失敗してしまった。
+
+### この関数による記述の変化
+
+この関数を使わないcontroller層での処理の一例は以下のもの。
+(簡略化のためエラーハンドリングなど関係ない部分は削っている)
+
+```go
+type UserResponse struct {
+  ID   int     `json:"id"`
+  Name string  `json:"name"`
+}
+
+func (c *userController) Get(id int) {
+  user := c.interactor.Get(id) // このuserはjsonタグなし
+  res := user.toResponse()
+  ctx.JSON(http.StatusOK, map[string]any{"user": res})
+}
+
+func (u *User) toResponse() *UserResponse {
+  return &{
+    ID:   u.ID,
+    Name: u.Name,
+  }
+}
+```
+
+jsonタグ付きの`UserResponse`だったり入れ替え関数を定義する必要がある。
+これだけだったらいいがエンドポイントごとにこれを書くのは中々冗長な気がする。
+
+そこで今回の関数を使った例が以下のもの。
+
+```go {3}
+func (c *userController) Get(id int) {
+  user := c.interactor.Get(id) // このuserはjsonタグなし
+  res := AddJsonTag(user)
+  ctx.JSON(http.StatusOK, map[string]any{"user": res})
+}
+```
+
+`AddJsonTag`は汎用的な関数なのでエンドポイントごとに構造体や変換のための関数を書く必要がない。
+
+## おまけ
+
+### toSnakeCaseの実装
+
+PascalCaseをsnake\_caseに変換するtoSnakeCaseの実装は以下の通り。
+
+```go
+func toSnakeCase(s string) string {
+	commonInitialismIndexes := make(map[int]bool, len(commonInitialisms))
+	for _, word := range commonInitialisms {
+		index := strings.Index(s, word)
+		if index != -1 {
+			for i := index + 1; i < index+len(word); i++ {
+				commonInitialismIndexes[i] = true
+			}
+		}
+	}
+
+	b := &strings.Builder{}
+	for i, r := range s {
+		if i == 0 {
+			b.WriteRune(unicode.ToLower(r))
+			continue
+		}
+		if commonInitialismIndexes[i] {
+			b.WriteRune(unicode.ToLower(r))
+			continue
+		}
+		if unicode.IsUpper(r) {
+			b.WriteRune('_')
+			b.WriteRune(unicode.ToLower(r))
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+```
+
+snake\_caseに変換するにあたって1点留意しなければならないのが、`ID`や`URL`などの単語はそのまま変換すると`i_d`や`u_r_l`となってしまうこと。
+
+Goではこういったよくある略称などは両方大文字にすることが推奨されているっぽい。
+なのでこれらの単語の中では`_`を付与しないようにした。
+どの単語の場合にこれらを適用するかは、[lintのrepository](https://github.com/golang/lint/blob/5614ed5bae6fb75893070bdc0996a68765fdd275/lint.go#L771-L810)で設定されているものをまんまパクった。
+
+### comparableの挙動
+
+最初引数をジェネリクスを使わずにanyにしていたのだが、それだと`(reflect.Type).NumField()`を使った時に以下のpanicが出た。
+
+```go
+func AddJson(target any) any {
+  ...
+
+  fields := make([]reflect.StructField, rt.NumField())
+  // reflect: NumField of non-struct type interface {}
+  ...
+}
+```
+
+文字通り、`interface{}`だと`Struct`型じゃないからpanicになってしまった。
+実際にデバッガを使って`rt.Kind()`を見てみると`Interface`になっていた。
+
+これをcomparableを使うと正常に処理が行われていて、これもデバッガを使って`rt.Kind()`を見てみると`Struct`になっていた。
+
+Goのcomparableをそんなにちゃんと知らないのだが、この挙動から推察するにcomparableは実行時には実際に受け取った型にキャストされて処理されるっぽい。
+anyはそのままanyのままなので今回panicになった。
+
+## なぜプロダクションコードで採用しなかったのか
+
+最初に書いた通り、それっぽいものはできたのだが実際に使うことはやめておいた。
+
+理由は主に3つある。
+
+### あらゆる構造体の形に対して汎用的な形になっていない
+
+今回みたいな単純な構造体だといいが、ネストした構造体の場合はその部分についてはjsonタグが付与されない。
+それをやるためには型情報を判別した上で再帰的に処理をする必要がある。
+その他にも構造体の配列型だとどうするだとか、色んなパターンに対して対応するのは結構手間がかかりそうだし思わぬバグに繋がる可能性がありそうだなと思ったから。
+
+### 型安全性が担保できない
+
+受け取る引数を本当は構造体かそのポインタに限定したかったが、おそらくGoではそのような型は存在しない。
+自信はないが多分ジェネリクス使っても自作できない気がする。
+色々試してみたところcomparableにするしかないという結論になったのだが、そうすると構造体以外を入れてもコンパイルエラーにはならないのでランタイムエラーになる可能性があってそれは嫌だなと。
+
+返り値がanyになるのも今回は許容できるかもしれないがなんかモヤモヤする。
+
+### reflectパッケージの使い方に自信が持てなかった
+
+ちゃんと使うのも初めてだったので正直これでいいのか感が拭えなかった。
+わりと至る所でpanicになる処理が書かれていたので、意図しないものが入ってきてpanicになる可能性を考えると進んで使おうとは思えなかった。
+
+総じてreflectパッケージについては、動的な処理を行うという点に関しては便利だなという印象だが、型安全性を犠牲にする面も少なくないなと思っているので、今のところ使わないで済むなら使わないほうがいいんだろうなという認識でいる。
+
+この辺はメリット、デメリットをちゃんと把握した上で使うのが良さそう。
+
+結局使わないということで、じゃあ当初の課題はどうするねんて感じだが明確な結論は出ていない。
+もしこうしたらいいのではみたいな意見あれば、教えてください。
+
+## まとめ
+
+reflectパッケージ、存在は知っていたしよくテスト書く時に使われている印象があって中身はどういうものか分かってなかったのだが、今回自分で実際に使いながら挙動確認できてだいぶ理解が深まった。
+
+これ使えばわりと色んなことができて便利そうだなと思う反面、ランタイムでのpanicの危険性が増えて頻繁に使いたくないなという気持ちもある。
+
+この辺の慣習みたいなのはよくわかっていないので、詳しい人いたら教えてください。
+もっとこうしたらいい感じになるよという実装のアイディアなどもあったら教えてもらえると嬉しいです。
+
+## 参考
+
+https://www.slideshare.net/takuyaueda967/reflect-27186813
