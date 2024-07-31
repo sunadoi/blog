@@ -1,0 +1,110 @@
+---
+title: setStateを使わないuseStateの意義
+ogImageTitle: setStateを使わないuseStateの意義
+description: useStateを使う時にsetStateを使わない場合の意義について記載。
+tags: React
+icon: React
+publishedAt: 2021/07/29
+updatedAt: 2023/03/19
+---
+
+useStateを使う時に以下のように2つめの返り値を省略できる
+
+```tsx
+const [state] = useState(initialState)
+```
+
+レビューしていた時にこの記法が出てきて、これ自体は知っていたのだがじゃあこれってどういう意義があるんだっけ？となってしまった
+
+setStateしないならuseState使わずに普通にconstで定義してしまえばいいのでは？と
+もっと言えば初期値のinitialStateをそのまま使えばいいのでは？と
+
+```tsx
+const state = initialState
+```
+
+でも結論これはuseStateを使うべき理由がちゃんとあって、聞いたらそりゃそうかとはなったんだけどちゃんと理解できてなかったのでメモしておく
+
+## setStateなしのuseStateを使うべき理由
+
+どういう場合にsetStateを使わないuseStateを使う理由があるか
+結論再レンダリングによって値の更新を行いたくない場合
+再レンダリングが発生しても初期値の値をそのまま使いたい場合には有用
+
+もうこの説明だけで事足りてる気はするが、一応具体例を記載しておく
+
+以下のような状況を考える
+booleanのhogeとfugaをpropsで受け取るコンポーネントがあったとしてその両方がtrueの場合のみモーダルを開くとする
+
+```tsx {5}
+import React from 'react'
+import { Modal } from 'foo'
+
+export const Component: React.VFC<{ hoge: boolean; fuga: boolean }> = ({ hoge, fuga }) => {
+  const [showModal] = React.useState(hoge && fuga)
+  return (
+    <>
+      {showModal && <Modal />}
+      ...
+    </>
+  )
+}
+```
+
+例えば、このコンポーネントがレンダリングされた時にhogeもfugaもtrueでモーダルが開いたとする
+そのモーダル上で何か操作をした際にhogeやfugaがfalseに変更された場合はこのコンポーネントが再レンダリングされる
+その際にモーダルをそのまま開いていたい場合に、showModalを以下のように定義していると再レンダリングの際にはfalseになってしまいモーダルが閉じてしまう
+
+```tsx
+const showModal = hoge && fuga
+```
+
+一方、useStateを使用していれば状態は初期値のままで保持されているので、再レンダリングでhogeやfugaがfalseになってもshowModalはtrueのままである
+
+**こういう初期値の状態をそのままキープしておきたい場合にはuseStateを使用する価値がある**
+
+ちなみに今回遭遇したケースはコンポーネント内で操作を行うとfirestore側のupdateがリアルタイムに反映されて再レンダリングが起きるので、それによってモーダルが閉じないようにするための措置だった
+
+PubSubみたいにリアルタイムに変更がある場合は特に使用する機会があるのかなーと思った
+
+ちなみにここで、値のメモ化という意味でuseMemoを使いたくなるかもだけど、useMemoはチューニングのためのもので一度cacheした値をずっと保持し続ける保証はないので状態管理に使ってはいけない
+
+## 2023.3.19追記
+
+コメントで別の方法を教えてもらったので記載しておく。
+
+それが`useRef`を使うもので、[こちらのコード](https://github.com/microsoft/fluentui/blob/master/packages/react-hooks/src/useConst.ts)が参考になる。
+必要な部分を再掲すると以下の通り。
+
+```tsx
+export function useConst<T>(initialValue: T | (() => T)): T {
+  const ref = React.useRef<{ value: T }>();
+  if (ref.current === undefined) {
+    ref.current = {
+      value: typeof initialValue === 'function' ? (initialValue as Function)() : initialValue,
+    };
+  }
+  return ref.current.value;
+}
+```
+
+refで初期化して、ただその値を返すだけのカスタムhooksを作る方法。
+これでもuseStateの第一引数だけ使うのと同じ目的が達成できる。
+
+この記事を書いた当時は知らなかったが、今考えると多分こっちの方を使うだろうなと思った
+
+### どちらがいいか？
+
+可読性という意味ではuseConstというカスタムhooksを使った方がいいのかもしれない
+useStateの第一引数だけのパターンはあまり見ない気がしており、意図が伝わりにくい気もするので
+
+useRefを使うケースの場合、ポイントはカスタムhooksとして中のロジックをきちんとカプセル化することだと思う
+使用する側で直接useRefを使って書くと、mutableなオブジェクトが露出してしまうので自由に書き換えられてしまう
+
+言わばconstではなくletを使っているのと同じ状況になってしまうので
+
+## おわりに
+
+結果を聞いてみれば基本的なことだけど、自分がいざ実装する時にすんなりこういう実装方法を思いついていたかというと怪しいなと思った
+
+レビューを通して色々質問できると知識が深まるのでとても嬉しい
