@@ -1,0 +1,146 @@
+---
+title: コミットログをきれいにするコマンドたち ~git rebase~
+ogImageTitle: コミットログをきれいにするコマンドたち ~git rebase~
+description: コミットログをきれいにするｔめのgitコマンドをまとめる。
+tags: Git
+icon: Git
+publishedAt: 2021/06/27
+updatedAt: 2021/06/27
+---
+
+最近転職した会社での開発方針がこれまでと色々と変わったのだが、その中でも今回はgitの使い方について取り上げてまとめてみる
+
+具体的にはこれまではコミットログをそこまで強く意識していなかったし、コンフリクトの解消もmergeして行なっていたのに対し、今ではrebaseを主に使用してコミットログをきれいにすることをかなり強く意識するようになった
+
+今回はmergeとrebaseの違いについては詳しくは記述せず、コミットログをきれいにするための様々なコマンドについてまとめる
+
+## コミットログを綺麗にする様々なコマンド
+
+### git rebase -i HEAD~
+
+まずは定番の`git rebase -i`について
+過去の3つのコミットに対して編集を行いたい場合には`git rebase -i HEAD~3`と打つと以下のような編集画面になる
+
+```plaintext
+pick commithash1 [feature] foo
+pick commithash2 [feature] bar
+pick commithash3 [feature] baz
+
+# Rebase commithash0..commithash3 onto commithash0 (3 commands)
+#
+# Commands:
+# p, pick <commit> = use commit
+# r, reword <commit> = use commit, but edit the commit message
+# e, edit <commit> = use commit, but stop for amending
+# s, squash <commit> = use commit, but meld into previous commit
+# f, fixup <commit> = like "squash", but discard this commit's log message
+...
+```
+
+ここでpickとなっている部分をCommandsに記載してあるものに変更することで、そのコミットに対して様々な編集ができるようになる
+
+ちなみにここでコミットの順番を変えることもできる
+
+ここではよく使うものだけピックアップする
+pは単純にコミットを作るもの。デフォルトはpickになってるが短縮形のpでも良い。他のコマンドも短縮形でいい
+
+#### r, reword
+
+コミットの内容は変えないが、コミットメッセージのみ修正するもの
+
+#### e, edit
+
+文字通り、そのコミットの内容を編集する
+そのコミットに新たに差分を追加したり、すでにコミットに含まれた差分を削除したりとわりとなんでもできる
+コミットメッセージも変えられる
+
+#### s, squash
+
+そのコミットを直前の(1つ上の)コミットと結合する
+この時、結合するコミットのコミットメッセージも結合対象のコミットメッセージの内容に含まれる
+
+#### f, fixup
+
+基本的にはsquashと同様、直前のコミットと結合するが、コミットメッセージは破棄され結合されるコミットのコミットメッセージのみが残る。
+個人的にはこっちの方がよく使う
+
+実際`git rebase -i`を叩いて上記のコマンドで編集すれば大体のことはできるので事足りる
+でももっとカジュアルにコミットを編集する方法があるので以下で紹介する
+
+### git commit –amend
+
+今新たに追加した差分を`git add`した後に`git commit --amend`するとその差分を直前のコミットに追加することができる
+
+そのままだとコミットメッセージを編集する画面になるので、`--no-edit`オプションを追加するとコミットメッセージを変更しないまま差分のみ追加できる
+
+よくやる使い方は、
+とりあえず実装していってキリがいいところで片っ端から1つのコミットに`git commit --amend`で追加していく
+→ 最後に`git reset`してコミットをばらした後に区切りがいい単位でまとめ直す
+ってのをよくやる
+
+### git commit –fixup \[コミットハッシュ\]
+
+直前のコミットじゃないコミットに差分を追加したい場合はどうするのか？
+`git commit --fixup`でできる
+
+`git log`をするとそれぞれのコミットのコミットハッシュが確認できる
+追加したい差分を`git add`した後に、追加したいコミットのコミットハッシュを調べて`git commit --fixup [コミットハッシュ]`とするとそのコミットに差分を追加するコミットが新しく作られる
+
+注意ポイントは、この時点ではまだ追加したい差分は追加されていない
+
+ここで`git log`でコミットログを見ると以下のようになっている
+
+```plaintext
+commithash4 (HEAD -> feature-hoge) fixup! [feature] foo
+commithash3 [feature] baz
+commithash2 [feature] bar
+commithash1 [feature] foo
+```
+
+これはつまりcommithash1に対してコミットを追加するためのfixupのコミットが作成されたということ
+fixupは`git rebase -i`で出てきたものでコミットをまとめるためのコマンドと同じ
+
+この状態で実際にコミットをまとめるためには以下のコマンドを打てば良い
+
+### git rebase -i –autosquash HEAD~
+
+`git rebase -i`に`--autosquash`オプションを付けて叩くと以下のような画面になる
+
+```plaintext
+pick commithash1 [feature] foo
+fixup commithash4 fixup! [feature] foo
+pick commithash2 [feature] bar
+pick commithash3 [feature] baz
+```
+
+これは`git rebase -i`した時の画面で、まとめるべきコミットがあらかじめfixupコマンドで挿入された形になっている
+
+つまり`git commit --fixup`でまとめたいコミットを指定して、`git rebase -i --autosquash`を叩けば勝手にまとめてくれる形でrebase画面が立ち上がる
+
+結局はrebaseなんだが、これだと新しい差分をカジュアルに追加できてかなり便利
+
+ちなみに`git rebase -i`するとコミットハッシュが変わるのでコミット履歴を変えることになる
+ここはチームによっては禁止されているところもあるのでチーム内でコンセンサス取る必要あり
+
+## HEAD~の別の指定方法
+
+`git rebase`や他のコマンドでもHEAD~でいくつ分のコミットかを指定することが多々ある
+
+この時コミット分数えて指定するのがめんどくさい時は、origin/mainとしてしまえばoriginのmainブランチ以降のコミットを指定したことと同じになるので大体はこれで事足りる
+
+これ地味にめっちゃ便利
+
+ただしremoteで追加のマージしたPRとかがあるとそれも取り込まれるので注意
+remoteの差分と修正分を混ぜないようにすべきだし、そもそも頻繁にgit fetchしてできるだけ今の作業ブランチをmainブランチに近づけるようにするのがいいとのこと
+
+## まとめ
+
+rebaseの使い方についてはコミットログを変えることになるため、綺麗になってわかりやすいというメリットの一方で履歴改竄は悪という考え方もある
+
+個人的にはコミットログがきれいになる方が好き
+
+ただレビューをもらった後の修正に関してはコミットを追加していくべきでそこではrebaseを使わないというのが一般的ではある気がする
+
+今のチームはそこもrebaseで良いって言われてて驚いた。。。
+
+けど個人的にはレビュー修正に関してはあんまりrebase使いたくないなーという気もする
