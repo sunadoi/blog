@@ -1,0 +1,243 @@
+---
+title: webpackからviteへのリプレイス
+ogImageTitle: webpackからviteへのリプレイス
+description: webpackからviteへリプレイスする際に必要な手順について記載
+tags: Vite,React,Storybook
+icon: Vite
+publishedAt: 2021/08/09
+updatedAt: 2021/08/09
+---
+
+これまでずっとwebpackを使ってきたのだが、プロジェクトがそこそこの規模になってくるとサーバーを立ち上げるのが遅い。起動も遅いし差分変更を反映させるのにも時間がかかる。
+
+と、いうわけで最近ちらほら聞くようになった爆速のviteに乗り換えることになった
+
+この記事はその時色々調べた背景や手順の備忘録、解決できなかった課題のメモ
+
+実際リプレイスしたらそれまで30秒以上かかってた起動が2秒くらいで表示されるようになって、差分反映も体感で1秒かからないくらいになって開発体験がとても良くなった。
+
+## viteの特徴
+
+viteとはvueの作者が開発しているビルドツール。
+vueの作者開発なんだけどReactでも使える。あざます。
+
+webpackからviteに変えるとどんないいことがあるか、一言で言うとビルドや差分更新が爆速になって開発体験が向上する
+
+詳細は[公式ページ](https://vitejs.dev/guide/why.html)に譲るがなぜ爆速になるのか、簡単に特徴だけ記載しておく
+
+webpackはビルド時に全ての依存関係を解消した上でバンドルする。
+つまりアプリケーションを起動する前にアプリケーション全体をクロールしてバンドルする必要があるので、規模が大きくなるほど時間がかかって辛くなる。
+
+この課題に対してviteは、モジュールを依存関係とソースコードの2つのカテゴリに分けることで、起動時間を改善する。
+
+依存関係はGo製のesbuildを用いて事前にバンドルすることで爆速に行う。
+公式ページによるとJSベースのバンドルラーよりも10～100倍速く依存関係を事前にバンドルするらしい。
+
+ソースコードはネイティブのES Modulesで提供することで、バンドルすることなくそのまま読み込ませることができるようになる。
+
+要は外部ライブラリの依存関係は事前にesbuildを用いて爆速でバンドルしておいて、ソースコードはバンドルせずそのままブラウザに提供して読み取ってもらうことで、アプリケーション全体をバンドルする必要がなくなって爆速になると認識した
+
+なおこれは開発環境での話であって、プロダクションビルドはこれまで通り行う必要がある。
+バンドルされていないESMを本番環境で使用するにはパフォーマンスなどの面でまだ課題があるからだとかなんとか
+あとその際のbuildにはesbuildではなくrollupを使用していて、現時点ではesbuildはプロダクションビルドする際にまだ課題があるとかなんとか
+
+それからviteはTSサポートしてはいるが、行うのはトランスパイルだけで型のチェックは行わない
+ので、型チェックは別途 `tsc --noEmit`などで行う必要がある
+
+さて、前置きはこれくらいにして実際にリプレイス時に行った作業を記載していく
+
+## リプレイス作業
+
+### ライブラリのインストール
+
+まずはライブラリをインストールする。今回はReactだったので以下の2つのみでok
+
+```bash
+yarn add --dev vite @vitejs/plugin-react-refresh
+```
+
+### vite.config.tsの設定
+
+ルート直下にvite.config.tsを作成する。
+設定ファイルがtsサポートしているの嬉しい。
+あとES Modulesで書けるから馴染みある書き方ができる
+
+```ts title="vite.config.ts" {10}
+import { resolve } from 'path'
+
+import reactRefresh from '@vitejs/plugin-react-refresh'
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  server: {
+    port: parseInt(process.env.PORT || '8000'),
+  },
+  plugins: [reactRefresh()],
+  resolve: {
+    alias: [{ find: /^@\/(.*)/, replacement: resolve(__dirname, 'src/$1') }],
+  },
+  define: {
+    global: 'window',
+  },
+})
+```
+
+webpack.config.jsの混沌とした記述からこんなにすっきり書けるようになるのは嬉しい
+babelが不要になるからbabelの設定ファイルも不要になるのも嬉しい
+
+基本的に必要なのはpluginsにreactRefreshを設定すること
+あとは[色々なオプション](https://vitejs.dev/config/)があるので必要なものを設定する
+一応モダンブラウザのみじゃなくてIE対応とかもできるっぽくて、@vitejs/plugin-legacyとかを使えばできるらしい
+
+上記では絶対pathの設定と、globalオブジェクトの設定を行なった
+globalをwindowに設定しないとソースコード内でwindow.scrollとか使っているコードが動かなかった
+
+### index.htmlの修正
+
+index.htmlをルート直下に移動する。
+これはデフォルトでvite.config.tsがあるのと同じところを読み込む仕様になっているため。
+移動させなくてもオプションでrootを設定すればできるっぽい
+
+その上でコードを以下のように修正
+
+```html title="index.html" {2}
+<div id="root"></div>
+<script type="module" src="/src/index.tsx"></script>
+```
+
+type=”module”とすることによってES Modulesで読み込むことができるようになる
+
+### 環境変数の変更
+
+今まで環境変数を`process.env`で読み取っていたが、ES Modulesで読み取れるように`import.meta.env`に変更する必要がある
+
+その上でviteではenv変数が誤ってクライアントに漏れないように、VITE\_というプレフィックスのついた変数のみがVite処理されたコードに公開されるらしい。
+ので、プレフィックスをつけた上で`import.meta.env.VITE_HOGE`のようにして読み込む
+
+### package.jsonのscriptsの変更
+
+起動コマンドとビルドコマンドを下記のように設定する。
+–modeはdevelopmentかproductionで環境を設定できる
+
+```json title="package.json"
+"start": "vite serve",
+"build": "vite build --mode development",
+```
+
+### Typeのimportを変更
+
+typeのimportは通常のオブジェクトと一括して行えなかったので分ける必要があった。
+ES Modulesが直接関係してるかは調査してないので不明
+
+```ts
+// NG
+import { HogeComponent, HogeProps } from './Hoge'
+
+// OK
+import type { HogeProps } from './Hoge'
+import { HogeComponent } from './Hoge'
+```
+
+### ESModulesで動かないパッケージをどうにかする
+
+viteにリプレイスした後、外部ライブラリで暗号化に関わるcryptoというライブラリが動かなくなってしまった
+
+GitHubのissueを漁ってみると[このissue](https://github.com/vitejs/vite/issues/728#issuecomment-767168681)に以下のような記述があった
+
+> Suggestion: if you have dependencies that expects to use Node built-ins, try swapping it out with something more modern. Relying on Node built-ins in the browser is bad practice, period.
+
+Nodeのbuilt-insなどはそのままではブラウザ上では動かないから、似たようなことができるもっとモダンな別のライブラリを探せとのこと
+余談だけど👍が8に対して、👎が24だったのと”period”で笑った
+
+まぁそのままでも動かすようには多分設定できるんだろうけど、後々のメンテも考えるとリプレイスした方が良さそうなので今回はjsshaにリプレイスしてめでたしとなった
+
+基本的にここまでのことを行えば、問題なくviteで動くようになった
+
+しかし、一部課題が残ったので以下でそれについて記載する
+
+## vite移行で生じた課題
+
+### storybookのみwebpackで動かす
+
+プロジェクトでstorybookを使用しており、このビルドも1分くらいかかる
+ので、当然storybookもviteで動かしたいと思い、リプレイスしたが動かない。。。
+
+またまたissueを漁っていると、storybookで `storiesOf` を使っている場合、その第二引数にはwebpackのmoduleを渡しているため、viteでは読み込めないとの記載が。。。
+
+現在storybookではstoriesOfは非推奨で、CSFというものを代わりに使って記載するように推奨している。
+今のバージョンは6.3で、7にする際にはstoriedOfはサポートしないかもとの記載も、、、
+
+とりあえず現状のプロジェクトでstorybookをviteで動かすのは厳しいということが分かったので、storybookのみ従来通りwebpackで動かす必要がある
+
+特にそれ専用の設定も必要ないと思ったのだが、1つ問題があった
+コードをviteで動かすようにする際、環境変数の読み込み方を`import.meta.env`で読み込むように変更した
+しかし、storybookでファイルを読み込む際には`process.env`でしか読み込めないのでエラーになる。。
+
+つまり、同じファイルに対してviteで読み込む際には`import.meta.env`で読み込む必要があって、storybookで読み込む際には`process.env`で読み込む必要がある
+
+解決方法は以下の通り
+まず以下のように環境変数を読み込むconfig.tsなるものを用意して、環境変数を使用する際には全てこのファイルから読み込むようにする
+
+```ts title="config.ts"
+const config = {
+  HOGE_API_KEY: import.meta.env.VITE_HOGE_API_KEY,
+  ...
+}
+
+export default config
+```
+
+```ts
+import config from '@/config'
+
+...
+const apiKey = config.HOGE_API_KEY
+```
+
+こうすることで各ファイルは環境変数をどのように読み込んでいるかについてわからなくなった
+
+その上で先程のconfig.tsの内容を`import.meta.env`を`process.env`で書き換えただけのconfigForStorybook.tsなるものを用意してstorybookの設定を以下のように追加する
+
+```js title=".storybook/main.js" {3}
+resolve: {
+  alias: {
+    '@/config': path.resolve(__dirname, '../src/configForStorybook'),
+    '@': path.resolve(__dirname, '../src'),
+  },
+},
+```
+
+3行目部分が追加した部分。
+つまり、各ファイルで@/configからconfigをimportするようにしたところを、storybookの時だけconfigForStorybook.tsから読み込むように上書きした
+
+これによって環境変数をviteでは`import.meta.env`で、storybook(webpack)では`process.env`で読み込むように振り分けられた
+
+### 一部のページでHMRが効かない
+
+基本的にファイルを編集するとHMRで爆速に変更が見れるようになったが、一部HMRではなくページリロードになってしまう部分がある
+
+色々issueなど原因調査したが結局ピンとくるものがなくてわからず。。。
+
+どなたか原因と解決方法についてわかる人がいたら教えて欲しいです
+
+### 循環参照によるエラー？
+
+ファイルAとファイルBを相互にimportしてると、before initialize的なエラーが発生する
+issueを見た感じ同様の現象が報告されていたが、明確な原因と対策は不明だった
+
+このエラーはいつも起きるわけではなく、上述のHMRではなくページリロードが起こっている最中にファイルに別の変更を加えてsaveすると再現した
+これはページリロードしても改善せず、ファイルをもう一度saveすると正常に表示される
+
+根本的な解決はしていないが、とりあえずファイルsaveでなんとかなることがわかったのでこのまま放置
+
+## まとめ
+
+最後に記述したようにいくつか課題に感じるところがあり、完璧に動作するとは言えない状況な気はした
+もちろん適切な設定方法ができていないだけなのかもしれないが
+
+ただそれだとしても爆速で起動、差分反映してくれるので開発体験はかなり向上したように思う
+
+また、色々調査する中でCommonJSやES Modulesについて前より詳しくなれたのはとても良かった
+あと新しめの技術であるが故に色々課題にぶち当たることも多く、その度にissueなどを見て解決する習慣がついたのもとても良かった
+
+リプレイス作業全体を通して色々と得られるものが大きかった & 開発体験向上したのでかなり満足である
