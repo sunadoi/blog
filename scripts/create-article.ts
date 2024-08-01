@@ -33,6 +33,7 @@ const result = await prompts(
 )
 
 const date = new Date()
+const yyyy = date.getFullYear()
 const yyyyMM = date
   .toLocaleDateString("ja-JP", {
     year: "numeric",
@@ -45,13 +46,15 @@ const yyyyMMdd = date.toLocaleDateString("ja-JP", {
   day: "2-digit",
 })
 
-const { exitCode } = await $`ls ./app/articles/${yyyyMM}`.nothrow().quiet()
+const { exitCode } = await $`ls ./app/articles/${yyyy}/${yyyyMM}`
+  .nothrow()
+  .quiet()
 
 if (exitCode !== 0) {
-  await $`mkdir ./app/articles/${yyyyMM}`
+  await $`mkdir ./app/articles/${yyyy}/${yyyyMM}`
 }
 
-await $`touch ./app/articles/${yyyyMM}/${result.slug}.mdx`
+await $`touch ./app/articles/${yyyy}/${yyyyMM}/${result.slug}.mdx`
 
 const frontMatter = `---
 title: ${result.title}
@@ -65,8 +68,8 @@ updatedAt: ${yyyyMMdd}
 `
 
 await promises.writeFile(
-  `./app/articles/${yyyyMM}/${result.slug}.mdx`,
+  `./app/articles/${yyyy}/${yyyyMM}/${result.slug}.mdx`,
   frontMatter,
 )
 
-await $`echo articles/${yyyyMM}/${result.slug}.mdx is created.`
+await $`echo articles/${yyyy}/${yyyyMM}/${result.slug}.mdx is created.`
