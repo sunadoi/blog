@@ -10,6 +10,7 @@ import { GitIcon } from "@/components/parts/icons/Git"
 import { GitHubIcon } from "@/components/parts/icons/GitHub"
 import { GitHubActionsIcon } from "@/components/parts/icons/GitHubActions"
 import { GoIcon } from "@/components/parts/icons/Go"
+import { HonoIcon } from "@/components/parts/icons/Hono"
 import { JavaScriptIcon } from "@/components/parts/icons/JavaScript"
 import { LinuxIcon } from "@/components/parts/icons/Linux"
 import { MySQLIcon } from "@/components/parts/icons/MySQL"
@@ -34,6 +35,7 @@ export type ArticleIconKey =
   | "React"
   | "Next.js"
   | "Svelte"
+  | "Hono"
   | "Storybook"
   | "NestJS"
   | "Node.js"
@@ -69,6 +71,7 @@ export const ArticleIconMap = new Map<
   ["React", ReactIcon],
   ["Next.js", NextJSIcon],
   ["Svelte", SvelteIcon],
+  ["Hono", HonoIcon],
   ["Storybook", StorybookIcon],
   ["NestJS", NestJSIcon],
   ["Node.js", NodeJSIcon],
