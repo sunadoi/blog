@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { Resvg } from "@resvg/resvg-js"
 import { ssgParams } from "hono/ssg"
 import { createRoute } from "honox/factory"
@@ -7,7 +7,10 @@ import { getArticle, getArticles } from "../../functions/articles"
 
 export default createRoute(
   ssgParams(() =>
-    getArticles().articles.map((article) => ({ slug: article.slug })),
+    // OGP画像が作成されてない場合のみ作成する。更新する場合は作成済みのものを削除する必要あり
+    getArticles()
+      .articles.filter((article) => !existsSync(getOGPPath(article.slug)))
+      .map((article) => ({ slug: article.slug })),
   ),
   async (c) => {
     const slug = c.req.param("slug")
@@ -73,11 +76,17 @@ export default createRoute(
     )
 
     const body = new Resvg(svg).render().asPng()
+    const ogpPath = getOGPPath(slug)
+    writeFileSync(ogpPath, body)
 
     c.header("Content-Type", "image/png")
     return c.body(body)
   },
 )
+
+const getOGPPath = (slug: string) => {
+  return new URL(`../../public/ogimage/${slug}.png`, import.meta.url)
+}
 
 const loadGoogleFont = async ({
   family,
