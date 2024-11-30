@@ -50,7 +50,7 @@ export default createRoute(async (c) => {
             </div>
             <div class="flex flex-col gap-1">
               <h3>好きな技術</h3>
-              <p>React / TypeScript / Go</p>
+              <p>React / TypeScript / Go / dbt</p>
             </div>
             <div class="flex flex-col gap-1">
               <h3>得意なこと</h3>
