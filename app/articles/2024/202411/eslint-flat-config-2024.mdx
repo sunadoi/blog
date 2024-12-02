@@ -1,0 +1,287 @@
+---
+title: ESLintのFlat Config対応 (2024)
+ogImageTitle: ESLintのFlat Config対応 (2024)
+description: ESLintのFlat Config対応をしたので、移行方法などについて記載する。
+tags: ESLint,TypeScript,Next.js
+icon: ESLint
+publishedAt: 2024/12/03
+updatedAt: 2024/12/03
+---
+
+以前、ESLintをFlat Configに置き換えるという記事を書きました。
+
+<EmbedLink url="https://suna.dev/articles/eslint-flat-config" />
+
+この記事を書いたのは2年前で、当時はまだ各種pluginやconfigのライブラリがFlat Configに対応していなかったため、各所でFlatCompatを使う必要がありました。
+
+あれから2年の時が経ち、各種ライブラリがFlat Configをサポートしています。
+また、最近Next.jsのv15によってeslintのv9対応がなされたこともあり、より最適な形でFlat Configとして移行できるようになったと思います。
+
+こうした流れを受けて、最近プロダクトでESLintのFlat Config移行をしたのでその時に色々調べたことを備忘録として残しておきます。
+基本的な設定の仕方などは以前の記事に記載したのとMigration Guideが用意されているので省略。
+
+<EmbedLink url="https://eslint.org/docs/latest/use/configure/migration-guide" />
+
+今回使用したpackageのバージョンは以下。
+主な移行対象は`@typescript-eslint`と`eslint-config-next`です。
+
+<Message type="info">
+eslint: 9.14.0
+eslint-config-prettier: 9.1.0,
+eslint-plugin-import: 2.31.0,
+typescript-eslint: 8.16.0
+eslint-plugin-react: 7.37.2,
+eslint-plugin-react-hooks: 5.0.0,
+@next/eslint-plugin-next: 15.0.3,
+</Message>
+
+
+## .eslintignoreの廃止
+
+これまでは`.eslintignore`にglobalにignoreしたいファイルを記載していました。
+Flat Configではこれもオブジェクトとして設定します。
+
+```js title="eslint.config.mjs"
+export default [
+  {
+    ignores: ["**/node_modules/**", "**/dist/**", "**/public/**"],
+  },
+  ...
+];
+```
+
+注意点として、従来の`.eslintignore`のようにglobalにignoreしたい意図で設定する場合は、そのオブジェクトの中では`ignores`以外は設定してはいけません。
+
+> If ignores is used without any other keys in the configuration object, then the patterns act as global ignores.
+https://eslint.org/docs/latest/use/configure/configuration-files#configuration-objects
+
+ドキュメントにもしっかり書いてました。最初`files`を併記していたせいで`ignores`が効かなくて若干ハマりました。
+
+## @typescript-eslintのリプレイス
+
+これまでは`@typescript-eslint/parser`と`@typescript-eslint/eslint-plugin`をそれぞれインストールし、`extends`に以下のような設定を書くことでplugin, parser, rulesを一括で設定していました。
+
+```json title=".eslintrc.json"
+{
+  "extends": [
+    "plugin:@typescript-eslint/recommended",
+  ],
+}
+```
+
+Flat Configでは新しく`typescript-eslint`を使用でき、`config`関数を使用することが推奨されています。
+
+```js title="eslint.config.mjs"
+import tseslint from "typescript-eslint"
+
+export default tseslint.config(
+  tseslint.configs.recommended,
+  {
+    ...
+  }
+)
+```
+
+これで同様にpluginとparser, rulesを一括で設定できます。
+
+実際のプロジェクトでは全体の中の1つのオブジェクトとして設定されてるようにしたかったため、以下のように書き換えましたがこの辺は好みかと思います。
+
+```js title="eslint.config.mjs"
+import tseslint from "typescript-eslint"
+
+export default [
+  ...tseslint.config({
+    extends: [tseslint.configs.recommended],
+  }),
+  {
+    ...
+  }
+]
+```
+
+ちなみにparserとpluginをそれぞれ個別に設定することも`typescript-eslint`だけで可能です。
+そのため、`@typescript-eslint/parser`と`@typescript-eslint/eslint-plugin`はもはや不要になります。
+
+```js title="eslint.config.mjs"
+import tseslint from "typescript-eslint"
+
+export default [
+  plugins: {
+    '@typescript-eslint': tseslint.plugin,
+  },
+  languageOptions: {
+    parser: tseslint.parser,
+  },
+  ...
+]
+```
+
+ちなみにpluginを設定する場合、namespaceは以前と同じ`@typescript-eslint`とすることが強く推奨されています。
+> We strongly recommend declaring our plugin with the namespace @typescript-eslint as shown above. If you use our shared configs this is the namespace that they use. This has been the standard namespace for our plugin for many years and is what users are most familiar with.
+https://typescript-eslint.io/packages/typescript-eslint#advanced-usage
+
+
+## eslint-config-nextのリプレイス
+
+以前までは`eslint-config-next`を使っていました。
+
+```json title=".eslintrc.json"
+{
+  "extends": [
+    "next/core-web-vitals",
+  ],
+}
+```
+
+しかし、こちらは現時点ではまだFlat Config対応していません。
+こちらのissueによるとFlatCompatを使う方法で解決できると記載されています。
+<EmbedLink url="https://github.com/vercel/next.js/issues/64114" />
+
+試してみたところ、確かに動いたのですがいくつか点で微妙だなと思いました。
+
+**微妙な点その1: 内部で`@typescript-eslint`をpluginとして定義している**
+
+Flat Configでは同じplugin定義を登録するとエラーになります。
+`next/core-web-vitals`の中で`@typescript-eslint`をpluginとして定義しているため、その状態でtseslintの設定を行うとエラーになります。
+
+```js title="eslint.config.mjs"
+export default [
+  ...compat.extends('next/core-web-vitals', 'next/typescript'),
+  ...tseslint.config({
+    extends: [tseslint.configs.recommended],
+  }),
+]
+```
+
+```bash
+TypeError: Key "plugins": Cannot redefine plugin "@typescript-eslint".
+```
+
+そのため、回避しようとすると若干煩雑な記述をせざるを得ませんでした。
+
+```js title="eslint.config.mjs"
+export default [
+  ...compat.extends('next/core-web-vitals', 'next/typescript'),
+  ...tseslint.configs.recommended.map((conf) => {
+    // next/core-web-vitalsの中でも@typescript-eslintをpluginに設定していて、二重定義でエラーになるためplugins以外を設定する
+    const { plugins: _, ...rest } = conf
+    return { ...rest }
+  }),
+]
+```
+
+**微妙な点その2: 内部で`eslint-plugin-import`をpluginとして定義している**
+
+その1と類似しますが、`eslint-plugin-import`も内部でpluginとして定義しているため、定義しようとすると同様にエラーになります。
+これは単純に定義しないようにすればすれば回避できますが、pluginが暗黙的に設定されているという点でFlat Configの利点を活かしきれてないように思います。
+
+**微妙な点その3: Flat Configでしか使用できない機能が使用できない**
+
+後述するESLint Config InspectorはFlat Configだけで使用できる機能です。
+`eslint-config-next`を使用している場合は、Flat Config対応していないためこの機能が使用できませんでした。
+
+以上の点から、`FlatCompat`を使う方針は断念。
+別のDiscussionで使用するpluginをそれぞれ個別に設定する方法が記載されていたのでこちらの方法を採用しました。
+
+<EmbedLink url="https://github.com/vercel/next.js/discussions/49337" />
+
+```js title="eslint.config.mjs"
+import nextPlugin from "@next/eslint-plugin-next"
+import reactPlugin from "eslint-plugin-react"
+import reactHooksPlugin from "eslint-plugin-react-hooks"
+
+export default [
+  ...
+  reactPlugin.configs.flat.recommended,
+  reactPlugin.configs.flat["jsx-runtime"],
+  {
+    plugins: {
+      "react-hooks": reactHooksPlugin,
+      "@next": nextPlugin,
+    },
+    ...reactHooksPlugin.configs.recommended.rules,
+    ...nextPlugin.configs.recommended.rules,
+    ...nextPlugin.configs["core-web-vitals"].rules,
+    "@next/next/no-img-element": "error",
+    "react/prop-types": "off",
+  }
+]
+```
+
+## eslint-config-prettierの設定
+
+`eslint-config-prettier`の中身は`rules`の中にあらゆるruleが`off`で設定されているだけなので、ruleの最後に適用するだけでokです。
+
+```js title="eslint.config.mjs"
+import prettierConfig from "eslint-config-prettier"
+
+export default [
+  ...
+  {
+    rules: {
+      ...
+      "react/prop-types": "off",
+      ...prettierConfig.rules,
+    }
+  }
+]
+```
+
+## ESLint Config Inspectorの使用
+
+Flat Configで使用できるツールとしてESLint Config Inspectorがあります。
+
+<EmbedLink url="https://eslint.org/blog/2024/04/eslint-config-inspector/" />
+
+`eslint --inspect-config`を実行すると、設定されている内容を可視化したサーバーが立ち上がります。
+
+<Img src="/assets/article/eslint-flat-config-2024/config-inspector.webp" width="75%" />
+
+わりと使い心地良いです。
+
+ちなみに、`linterOptions`とsしてdefaultで`reportUnusedDisableDirectives: 1`が入っていて、未使用のdisableコメントをwarnにしてくれるようになってました。
+このオプション自体は以前からあったらしいんですが、初めて知りました。
+v8.56.0からerrorにもできるようになったらしいです。
+
+こういうdefaultの設定も視覚的に見れるようになったのは便利だなと思います。
+
+## 適用前後のチェック
+
+上記のConfig Inspectorはかなり便利ですが、Flat Configでしか使えません。
+Flat Configに移行した前後で適用されるルールが変わっていないか、適用するファイルが変わっていないかをきちんとチェックしたいです。
+
+以下の記事がとても参考になりました。
+<EmbedLink url="https://blog.nnn.dev/entry/2023/10/19/110000" />
+
+この記事を参考に、対象ファイルが変わってないかは以下のコマンドで確認しました。
+```bash
+pnpm eslint --debug "src/**/*.ts" |& grep "eslint:languages:js Parsing successful:" | sed 's/.*eslint:languages:js Parsing successful://'
+```
+
+適用されるルールが変わっていないかは以下のコマンドでファイル出力し、以前のファイルと比較して確認しました。
+```bash
+pnpm eslint --print-config src/foo.tsx > eslint-after.log.json
+```
+
+この辺をいい感じにチェックしてくれるツールもありますが、今回は使用しませんでした。
+<EmbedLink url="https://github.com/sajikix/check-eslint-config-compat" />
+
+
+## まとめ
+
+- globalなignoreをしたいなら`ignores`のみを設定したオブジェクトを定義する
+- @typescript-eslintのリプレイスは`typescript-eslint`を使う
+- eslint-config-nextはFlat Config対応していないので、pluginを個別に設定する
+
+以前も移行作業自体はしたことがありますが、個人的には適用内容をとても追いやすくなったと思います。
+可視化するESLint Config Inspectorも便利です。
+
+以前よりもライブラリのサポートが進んで`FlatCompat`を一切使わずにFlat Config移行することができました。
+
+## 参考
+
+<EmbedLink url="https://eslint.org/docs/latest/use/configure/migration-guide" />
+
+<EmbedLink url="https://github.com/vercel/next.js/discussions/49337" />
+
+<EmbedLink url="https://blog.nnn.dev/entry/2023/10/19/110000" />
