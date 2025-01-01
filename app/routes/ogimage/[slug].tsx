@@ -80,7 +80,8 @@ export default createRoute(
     writeFileSync(ogpPath, body)
 
     c.header("Content-Type", "image/png")
-    return c.body(body)
+    // https://github.com/honojs/hono/issues/3729
+    return c.body(body as unknown as ArrayBuffer)
   },
 )
 

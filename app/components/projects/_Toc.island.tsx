@@ -1,6 +1,6 @@
 import clsx from "clsx"
 import { useEffect, useState } from "hono/jsx"
-import tocbot from "tocbot"
+import { destroy, init } from "tocbot"
 import { Card } from "../parts/Card"
 import { TocIcon } from "../parts/icons/Toc"
 
@@ -13,13 +13,13 @@ export const Toc = () => {
     if (!import.meta.env.DEV && import.meta.env.MODE !== "client") return
     if (!window.matchMedia(largerThanLg).matches) return
 
-    tocbot.init({
+    init({
       tocSelector: ".toc",
       contentSelector: ".article",
       headingSelector: "h2, h3",
       scrollSmoothOffset: -10,
     })
-    return () => tocbot.destroy()
+    return () => destroy()
   }, [])
 
   return (
@@ -40,13 +40,13 @@ export const TocButton = () => {
     if (!import.meta.env.DEV && import.meta.env.MODE !== "client") return
     if (window.matchMedia(largerThanLg).matches) return
 
-    tocbot.init({
+    init({
       tocSelector: ".toc-dialog",
       contentSelector: ".article",
       headingSelector: "h2, h3",
       scrollSmoothOffset: -10,
     })
-    return () => tocbot.destroy()
+    return () => destroy()
   }, [])
 
   const toggleDialog = () => {
