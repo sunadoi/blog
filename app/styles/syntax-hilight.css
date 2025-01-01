@@ -45,7 +45,7 @@ code > span {
 }
 
 [data-highlighted-line-id="remove"] {
-  background: #3F2D32;
+  background: #3f2d32;
 }
 
 figure[data-rehype-pretty-code-figure]:has(> [data-rehype-pretty-code-title])
