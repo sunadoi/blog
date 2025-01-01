@@ -17,16 +17,18 @@
     --radius: 0.5rem;
   }
 
-  .light, .light-theme {
+  .light,
+  .light-theme {
     --background: var(--indigo3);
     --card: var(--indigo2);
     --popover: var(--indigo2);
     --foreground: var(--slate12);
   }
 
-  .dark, .dark-theme {
+  .dark,
+  .dark-theme {
     --background: var(--blue1);
-    --card: #22272E;
+    --card: #22272e;
     --popover: var(--slate3);
     --foreground: #ddd;
   }

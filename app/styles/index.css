@@ -1,6 +1,6 @@
-@import './syntax-hilight.css';
-@import './color.css';
-@import './toc.css';
+@import "./syntax-hilight.css";
+@import "./color.css";
+@import "./toc.css";
 
 @tailwind base;
 @tailwind components;
@@ -53,6 +53,7 @@
   }
 
   @view-transition {
+    /* biome-ignore lint/correctness/noUnknownProperty: */
     navigation: auto;
   }
 }

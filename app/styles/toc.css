@@ -21,7 +21,8 @@
   font-weight: 600;
 }
 
-.toc-list-item .node-name--H2::before, .toc-list-item .node-name--H3::before {
+.toc-list-item .node-name--H2::before,
+.toc-list-item .node-name--H3::before {
   content: "・ ";
   margin-left: -1rem; /* ・の分の幅を打ち消す。折り返し時にインデントを下げるための調整。 */
 }
