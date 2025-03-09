@@ -1,0 +1,187 @@
+---
+title: MakefileをTaskfileにリプレイス
+ogImageTitle: MakefileをTaskfileにリプレイス
+description: タスクランナーとしてMakefileを使用していたプロジェクトをTaskfileに移行した
+tags: Go
+icon: Go
+publishedAt: 2025/03/09
+updatedAt: 2025/03/09
+---
+
+今の開発しているプロダクトではMakefileをタスクランナーとして利用していました。
+しかし、Makefileは本来タスクランナーではないのでタスクランナーとして利用できるものを探していたところTaskfileを見つけたので移行しました。
+
+本記事では移行して良かった点や他のタスクランナーとの比較などをまとめておきます。
+
+## Taskfileとは？
+Taskfileは、Goで書かれたタスクランナーです。
+YAMLベースの設定ファイルを使用して、タスクを定義することができます。
+
+Goで書かれているため単一のバイナリで動き、他への依存がありません。
+MacであればHomeBrewなどで簡単にインストールできます。
+Go製なのでgo installでもインストールできます。
+
+## Taskfileの設定
+
+インストール方法はいくつかありますが、たとえば以下のようなコマンドでインストールできます。
+```bash
+# go installの場合
+go install github.com/go-task/task/v3/cmd/task@latest
+
+# Homebrewの場合
+brew install go-task
+```
+
+設定ファイルはyamlでTaskfile.ymlのようなファイルに以下のように記述します。
+(ファイル名はcase insensitive)
+
+```yaml title="Taskfile.yml"
+version: '3'
+
+tasks:
+  default:
+    desc: タスク一覧出力
+    cmds:
+      - task --list
+
+  lint:
+    desc: lintの実行
+    cmds:
+      - golangci-lint run ./... -v
+```
+
+## Taskfileに移行するメリット・デメリット
+
+今回はMakefileから移行したので移行にあたって感じたメリットとデメリットをまとめておきます。
+
+### メリット
+1. Makefileよりかはyamlの方が読みやすい
+1. OSに依存しないクロスプラットフォーム対応
+1. 機能がリッチ
+
+1について、yamlが読みやすくメンテしやすいかというと賛否両論ありそうではありますが、少なくとも個人的にはMakefileの`.PYHONY`などの独自記法よりかは読みやすいです。
+
+2については、プロダクトメンバー全員がMacOSなので現状あまり恩恵は受けられてませんが環境依存がなくなるのは嬉しいですね。
+
+3についてはドキュメントにもある通りかなり豊富な機能があります。その中でもこれは良かったというものは後述します。
+
+### デメリット
+1. インストール作業が必要
+1. CIでもtaskのインストール作業が必要になる
+
+1について、プロダクトメンバー全員がMacOSなのでmakeコマンドは何もしなくても使えていたのに対して、Taskはインストール作業が必要になってしまいます。
+とは言え、今のプロダクトではGoを使用しており、Goのv1.24からはgo toolsを使えるようになったので特別なインストール作業をすることなく使えるようになりました。
+実は以前からMakefileからの移行を考えていたのですが、go toolsを使えるようになったことで踏み切ることが出来ました。本当に便利ですね。
+
+2についても1と同様ですが、こちらも公式からActionsが用意されているのでそのステップを挟むだけで解決可能なのでさほど障壁にはなりません。
+
+## 便利だった機能
+
+以下のドキュメントに様々な使用方法が記載してありますが、ここでは特に便利だった機能について紹介します。
+<EmbedLink url="https://taskfile.dev/usage" />
+
+### dotenvでenvファイルを読み込める
+
+dotenvでenvファイルを読み込めるので、人によって参照値が異なるものをenvファイルで管理することができます。
+
+たとえば自分たちのプロダクトではAWS上のDBに対してport forwardで接続するシェルスクリプトを用意していて、それを以下のようにMakefileで定義していました。
+
+```makefile title="Makefile"
+.PHONY: dev-read
+dev-read: ## Port forward to dev DB read.
+	sh ./scripts/connect_db.sh dev read $(aws_profile)
+```
+
+このシェルスクリプトはAWSのprofile名を引数として受け取りますが、このprofile名は人によって異なる可能性があるためMakefileでも引数として受け取れるようにしています。そのため実行コマンドは以下のようになります。
+
+```bash
+make dev-read aws_profile=foo_profile
+```
+
+Taskfileのdotenv機能を使えば一々引数を指定せず実行できるようになります
+```bash
+task dev-read
+```
+
+これに必要な設定は以下です。
+
+```env title=".task.env"
+aws_profile=foo_profile
+```
+
+```yaml title="Taskfile.yml"
+dotenv: ['.task.env']
+
+tasks:
+  dev-read:
+    desc: Port forward to dev DB read.
+    cmds:
+      - sh ./scripts/connect_db.sh dev read {{.aws_profile}}
+```
+
+もちろん引数として渡せばprofile名を上書きして実行することも出来ます。地味に便利です
+
+### ワイルドカード引数が使える
+
+Taskfileではワイルドカード引数を使えるので、1つのタスク定義で柔軟な設定ができるようになります。
+
+たとえば1つ前の例ではdev環境でのDB接続を行っていましたが、Makefileでは環境ごとにタスクランナーを用意していました。
+
+```makefile title="Makefile"
+.PHONY: dev-read
+dev-read: ## Port forward to dev DB read.
+	sh ./scripts/connect_db.sh dev read $(aws_profile)
+
+.PHONY: stg-read
+stg-read: ## Port forward to stg DB read.
+	sh ./scripts/connect_db.sh stg read $(aws_profile)
+
+.PHONY: prd-read
+prd-read: ## Port forward to prd DB read.
+	sh ./scripts/connect_db.sh prd read $(aws_profile)
+```
+
+Taskfileではこれを1つの定義にすることができます。
+
+```yaml title="Taskfile.yml"
+tasks:
+  *-read:
+    desc: Port forward to DB read.
+    vars:
+      env: '{{index .MATCH 0}}'
+    cmds:
+      - sh ./scripts/connect_db.sh {{.env}} read {{.aws_profile}}
+```
+
+実行するコマンドごとに環境別のタスクを実行することができるようになります。ターミナル上で実行結果は以下のように出力されます。
+```bash
+task prd-read
+task: [*-read] sh ./scripts/connect_db.sh prd read foo_profile
+```
+
+他にも色々機能があるので適宜使用していきたいです。
+
+## 他のタスクランナーツール
+
+Makefileから移行するにあたって、他のタスクランナーも検討したところJustというツールが候補に上がりました。
+
+しかし、以下の理由から今回はTaskを使うことにしました。
+- 設定ファイルが独自記法であるためメンテしにくそう
+- Go製ではないのでgo toolsを使って管理できない
+- ドキュメントがTaskの方が読みやすいと感じた
+
+## まとめ
+
+Taskfileへの移行によって以下の恩恵が得られるようになりました。
+
+- Makefileよりかはメンテしやすくなった
+- envファイルの読み込みやワイルドカード引数などの便利な機能が使える
+
+ちなみにMakefileからの移行自体がそれなりにめんどくさそうと思ってたのですが、AIエージェントに頼んだら精度良く移行ファイル書いてくれました。
+こういう単純作業は本当にハードル低くできる時代になりましたね。
+
+## 参考
+
+<EmbedLink url="https://taskfile.dev/" />
+
+<EmbedLink url="https://tech.macloud.jp/entry/2023/07/28/185145" />
