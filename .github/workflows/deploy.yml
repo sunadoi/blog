@@ -24,12 +24,9 @@ jobs:
         run: bun install
       - name: Build project
         run: bun run build
-      - name: deploy to Cloudflare Pages
-        id: cloudflare_pages_deploy
-        uses: cloudflare/pages-action@v1
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: "blog"
-          directory: './dist'
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          command: pages deploy ./dist --project-name=blog
