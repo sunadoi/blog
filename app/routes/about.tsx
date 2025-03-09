@@ -82,7 +82,6 @@ export default createRoute(async (c) => {
             </div>
             <div class="leading-8">
               <p>このサイトはHonoXで作られています</p>
-              <p>月一程度の更新が目標です</p>
               <br />
               <p>
                 記事が参考になったという方は、以下からサポートいただけると次の記事書くモチベになりますのでよろしくお願いします☕

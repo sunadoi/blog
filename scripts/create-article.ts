@@ -46,15 +46,8 @@ const yyyyMMdd = date.toLocaleDateString("ja-JP", {
   day: "2-digit",
 })
 
-const { exitCode } = await $`ls ./app/articles/${yyyy}/${yyyyMM}`
-  .nothrow()
-  .quiet()
-
-if (exitCode !== 0) {
-  await $`mkdir ./app/articles/${yyyy}/${yyyyMM}`
-}
-
-await $`touch ./app/articles/${yyyy}/${yyyyMM}/${result.slug}.mdx`
+const filePath = `./app/articles/${yyyy}/${yyyyMM}/${result.slug}.mdx`
+await $`mkdir -p $(dirname ${filePath}) && touch ${filePath}`
 
 const frontMatter = `---
 title: ${result.title}
