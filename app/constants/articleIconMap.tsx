@@ -23,6 +23,7 @@ import { ReactIcon } from "@/components/parts/icons/React"
 import { RenovateIcon } from "@/components/parts/icons/Renovate"
 import { StorybookIcon } from "@/components/parts/icons/Storybook"
 import { SvelteIcon } from "@/components/parts/icons/Svelte"
+import { TerraformIcon } from "@/components/parts/icons/Terraform"
 import { TypeScriptIcon } from "@/components/parts/icons/TypeScript"
 import { ViteIcon } from "@/components/parts/icons/Vite"
 import { VitestIcon } from "@/components/parts/icons/Vitest"
@@ -52,6 +53,8 @@ export type ArticleIconKey =
   | "AWS"
   | "Firebase"
   | "Firestore"
+  | "Terraform"
+  | "Snowflake"
   | "GitHub"
   | "GitHub Actions"
   | "Git"
@@ -88,6 +91,8 @@ export const ArticleIconMap = new Map<
   ["AWS", AWSIcon],
   ["Firebase", FirebaseIcon],
   ["Firestore", FirestoreIcon],
+  ["Terraform", TerraformIcon],
+  ["Snowflake", "❄️"],
   ["GitHub", GitHubIcon],
   ["GitHub Actions", GitHubActionsIcon],
   ["Git", GitIcon],

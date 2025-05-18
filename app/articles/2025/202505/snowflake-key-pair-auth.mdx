@@ -1,0 +1,265 @@
+---
+title: snowflakeのKeyPair認証移行
+ogImageTitle: snowflakeのKeyPair認証移行
+description: Snowflakeで推奨されるKeyPair認証への移行手順と、Go、dbt、Terraformなど各種クライアントでの具体的な設定方法について解説します。
+tags: Snowflake,Go,Terraform
+icon: Snowflake
+publishedAt: 2025/05/18
+updatedAt: 2025/05/18
+---
+
+## 背景
+
+Snowflakeから、2025年11月以降にID/パスワードのみでの認証を廃止するというアナウンスがありました。
+https://www.snowflake.com/en/blog/blocking-single-factor-password-authentification/
+
+この変更に伴い、以下の対応が必要になります。
+
+-   人間のユーザー: MFA（多要素認証）の設定、またはSAML/OAuth認証への移行
+-   アプリケーションで使用しているユーザー: KeyPair認証またはOAuth認証への移行
+
+自分の管理しているプロダクトでは、元々人間のユーザーはSSO（シングルサインオン）認証のみに設定していたため、特に影響はありませんでした。一方で、アプリケーションで利用しているユーザーについては対応が必要だったので、今回はKeyPair認証へ切り替えることにしました。
+
+実際に作業を進めてみると、いくつかハマりどころがあり、少し手間取った部分もあったため、備忘録として対応内容をまとめておこうと思います。
+
+## 基本的な対応方針
+
+まず、Snowflakeにおけるユーザータイプについて理解しておく必要があります。ユーザーには主に以下のタイプが存在します。
+
+-   PERSON/NULL: 人間のユーザーアカウント
+-   SERVICE: アプリケーションやサービスが利用するためのユーザーアカウント
+-   LEGACY_SERVICE: 従来のユーザータイプで、ID/パスワードによる認証が可能（ただし、このタイプは2025年11月に廃止予定）
+
+今回の対応として、最初にアプリケーションで使用している既存ユーザーのタイプを `LEGACY_SERVICE` に変更しました。これは、変更しない場合、人間のユーザーとして扱われ、2025年8月以降MFAが必須となってしまうためです。
+
+現プロダクトではTerraformでユーザーを管理していたため、リソースタイプを `snowflake_service_user` から `snowflake_legacy_service_user` へ以下のように変更しました。
+
+```tf title="user.tf" {1}#remove {2}#add
+resource "snowflake_service_user" "foo" {
+resource "snowflake_legacy_service_user" "foo" {
+  ...
+}
+```
+
+この変更により、一時的にID/パスワードでの認証を引き続き利用できる状態を確保しました。
+
+次に、KeyPair認証の設定です。基本的な手順は、[Snowflakeの公式ドキュメント](https://docs.snowflake.com/ja/user-guide/key-pair-auth)に記載されています。
+キーペアを発行し、ユーザーに公開鍵を登録します。
+今回は、AWSのSSM Parameter Storeで鍵を管理することにしているので、terraformで以下のように設定しました。
+
+```tf title="user.tf"
+data "aws_ssm_parameter" "snowflake_foo_user_public_key" {
+  name = "/path/to/publick-key"
+}
+
+resource "snowflake_service_user" "foo" {
+  ...
+  rsa_public_key = data.aws_ssm_parameter.snowflake_foo_user_public_key.value
+}
+```
+
+これで、Snowflakeユーザーへの公開鍵の登録は完了です。あとは、各アプリケーション（クライアント）側で、対応する秘密鍵を使用して認証を行うように変更します。
+
+## クライアント側の対応
+
+秘密鍵を使用した認証設定は、クライアントライブラリによって秘密鍵の渡し方や形式に違いがあるため、それぞれの仕様に合わせた対応が必要です。
+
+まずクライアントによって、秘密鍵そのものを渡す方式と、秘密鍵が保存されているファイルパスを渡す方式があります。
+今回自分が対応したほとんどのクライアントではこれら両方がサポートされていました。
+
+さらに、秘密鍵そのものを渡す方式の中でも、以下のバリエーションがあります。
+
+-   秘密鍵ファイルの中身をそのままの文字列で渡す。
+-   秘密鍵ファイルのヘッダー (`-----BEGIN PRIVATE KEY-----`など) とフッター (`-----END PRIVATE KEY-----`など) を取り除き、さらに改行も削除して一行の文字列にして渡す。
+
+この辺の話は以下の記事が参考になりました。
+
+<EmbedLink url="https://zenn.dev/dataheroes/articles/snowflake-private-key-auth" />
+
+以下に、自分が対応したクライアントごとの具体的な設定方法をまとめます。
+なお、基本的に秘密鍵そのものを渡せる場合はその方式を利用し、対応していない場合はファイルパスを渡す方式としています。
+
+### dbt
+
+秘密鍵そのものを扱う場合は、ヘッダーとフッターを取り除き改行も削除して一行の文字列にした形式で渡す必要があります。
+
+### snowflake-connector-python
+
+dbtと同様に、秘密鍵のヘッダーとフッターを取り除き、改行も削除して一行の文字列にした形式で渡す必要があります。
+
+### terraform-provider-snowflake
+
+秘密鍵そのものを渡す必要がありますが、`SNOWFLAKE_PRIVATE_KEY`という環境変数に設定するのでも良さそうです。
+<EmbedLink url="https://registry.terraform.io/providers/Snowflake-Labs/snowflake/latest/docs#private_key-1" />
+
+しかし、実際にやってみるとうまくパースされずにエラーとなってしまいました。
+```bash
+Error: could not retrieve private key: could not parse private key, key is not in PEM format
+```
+
+issueにも同じような現象の人がいて、最終的に文字列を頑張って組み立て直して対応してそうです...
+<EmbedLink url="https://github.com/snowflakedb/terraform-provider-snowflake/issues/2432" />
+
+あんまりガチャガチャ操作したくもなかったので、Terraformの組み込み関数である `file()` を使用して、秘密鍵が保存されているファイルパス経由で読み込ませるように対応しました。
+
+```tf title="provider.tf"
+provider "snowflake" {
+  authenticator = "SNOWFLAKE_JWT"
+  private_key   = file("~/.snowflake/rsa_key.p8")
+  ...
+}
+```
+
+### SnowSQL
+
+SnowSQLでは、秘密鍵そのものを渡すことはできず秘密鍵のファイルパスを指定する必要があります。
+パスワードは`SNOWSQL_PWD`という環境変数を設定しておけば勝手に読み込んでくれるようなのですが、秘密鍵はそのような仕組みがないため、`private_key_path`というオプションを毎回指定する必要がある気がしています。若干不便ですね...
+
+```bash
+snowsql --private-key-path <path>/rsa_key.p8 ......
+```
+
+### gosnowflake
+
+秘密鍵の文字列をそのまま渡すことが可能です。
+ただし、注意点として、Goの標準ライブラリだけではPKCS#8形式でエンコードされた秘密鍵のデコードができません。
+
+> Note: As of February 2020, Golang's official library does not support passcode-encrypted PKCS8 private key. For security purposes, Snowflake highly recommends that you store the passcode-encrypted private key on the disk and decrypt the key in your application using a library you trust.
+https://pkg.go.dev/github.com/snowflakedb/gosnowflake#hdr-JWT_authentication
+
+そのため、もし暗号化された秘密鍵を使用する場合は、別途サードパーティのライブラリを利用してデコード処理を実装する必要があります。
+一例として、terraform-provider-snowflakeのソースコードが参考になります。
+
+<EmbedLink url="https://github.com/snowflakedb/terraform-provider-snowflake/blob/98bbf2c83e804b69ad2b62ea4862e6328a8494e6/pkg/provider/provider.go#L513C1-L540C2" />
+
+### golang-migrate
+
+現プロダクトではRDBだけでなくsnowflakeでもmigration処理に`golang-migrate`を使用しています。
+
+`golang-migrate`は、CLIでの使用とGoのライブラリとしての使用が可能です。
+基本的にmigration操作はGitHub Actions経由でやっていたので、CLIで使用されていました。
+
+CLIで使用する場合は基本的にdatabaseのURLを文字列で指定することになり、snowflakeも例外ではありません。
+```bash
+snowflake://user:password@accountname/schema/dbname?query
+```
+
+passwordはこれで対応できますが、内部実装的にこのインターフェースでは秘密鍵は対応していません。
+対応させようとしても秘密鍵を文字列として渡してparse処理させるのが煩雑な処理になり難しいのだと推測します。
+
+そのため、やや面倒ですがmigrationを行うGoのスクリプトを用意し、GitHub Actionsの中でそのスクリプトを実行するようにしました。
+
+```go title="migrate.go"
+const (
+	statusOK = 0
+	statusNG = 1
+)
+
+func main() {
+	migrationType := flag.String("type", "", "up or down")
+	migrationPath := flag.String("path", "", "migration fileのパス")
+	migrationDownStep := flag.String("downStep", "", "down時のステップ数")
+	flag.Parse()
+
+	if *migrationType == "" || *migrationPath == "" {
+		flag.Usage()
+		fmt.Println("migrationType and migrationPath are required")
+		os.Exit(statusNG)
+	}
+
+	os.Exit(run(*migrationType, *migrationPath, *migrationDownStep))
+}
+
+func run(migrationType string, migrationPath string, migrationDownStep string) int {
+  // 環境変数から認証情報を取得してconfigを生成
+  config, err := getConfig()
+  if err != nil {
+    fmt.Printf("failed to get config: %v", err)
+    return statusNG
+  }
+
+  dsn, err := gosnowflake.DSN(config)
+  if err != nil {
+    fmt.Printf("failed to get dsn: %v", err)
+    return statusNG
+  }
+  db, err := sql.Open("snowflake", dsn)
+  if err != nil {
+    fmt.Printf("failed to open db: %v", err)
+    return statusNG
+  }
+  defer db.Close()
+
+  driver, err := snowflake.WithInstance(db, &snowflake.Config{})
+  if err != nil {
+    fmt.Printf("failed to create driver: %v", err)
+    return statusNG
+  }
+
+  m, err := migrate.NewWithDatabaseInstance(fmt.Sprintf("file://%s", migrationPath), "snowflake", driver)
+  if err != nil {
+    fmt.Printf("Migration initialization failed: %v", err)
+    return statusNG
+  }
+
+  switch migrationType {
+  case "up":
+    if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+      fmt.Printf("Migration up failed: %v", err)
+      return statusNG
+    }
+  case "down":
+    if migrationDownStep == "" {
+      if err := m.Down(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+        fmt.Printf("Migration down failed: %v", err)
+        return statusNG
+      }
+    } else {
+      ds, err := strconv.Atoi(migrationDownStep)
+      if err != nil {
+        fmt.Printf("Invalid downStep: %s", migrationDownStep)
+        return statusNG
+      }
+
+      if err := m.Steps(-ds); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+        fmt.Printf("Migration down failed: %v", err)
+        return statusNG
+      }
+    }
+  default:
+    fmt.Printf("Invalid migration type: %s", migrationType)
+    flag.Usage()
+    return statusNG
+  }
+}
+```
+
+
+これでプロダクトで使っていた全てのsnowflakeクライアントでKeyPair認証に対応できました。(意外とあった...)
+あとはterraformで管理しているユーザーのタイプを `LEGACY_SERVICE` から `SERVICE` に変更すれば完了です。
+(`snowflake_service_user`では`password`が指定できないようになっています)
+
+```tf title="user.tf" {1,5}#remove {2}#add
+resource "snowflake_legacy_service_user" "foo" {
+resource "snowflake_service_user" "foo" {
+  ...
+  rsa_public_key = data.aws_ssm_parameter.snowflake_foo_user_public_key.value
+  password       = data.aws_ssm_parameter.snowflake_foo_user_password.value
+}
+```
+
+
+## まとめ
+
+SnowflakeのID/パスワード認証のみでのログイン廃止措置に伴い、アプリケーションでの認証をKeyPairへ移行しました。
+基本的な流れはドキュメント通りに進められますが、クライアントライブラリごとに秘密鍵の扱いに差異があるため、それぞれの仕様に合わせた対応が必要になるのが面倒でした...
+いろいろなクライアントを使用している場合は早めに対応しておいた方が良さそうです。
+
+今回の対応で得た知見が、同様の対応をされる方の参考になれば幸いです。
+
+## 参考
+
+<EmbedLink url="https://zenn.dev/dataheroes/articles/fa0b8c9b0017bb" />
+<EmbedLink url="https://zenn.dev/dataheroes/articles/snowflake-private-key-auth" />
+<EmbedLink url="https://www.snowflake.com/en/blog/blocking-single-factor-password-authentification/" />
+<EmbedLink url="https://docs.snowflake.com/ja/user-guide/key-pair-auth" />
