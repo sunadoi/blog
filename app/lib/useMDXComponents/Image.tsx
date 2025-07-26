@@ -1,5 +1,5 @@
-import { getAssetPath } from "@/functions/assetPath"
 import type { JSX } from "hono/jsx/jsx-runtime"
+import { getAssetPath } from "@/functions/assetPath"
 
 export const Img = async ({
   src,

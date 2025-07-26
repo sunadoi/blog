@@ -25,7 +25,11 @@
   }
 
   html {
-    font-family: AdjustedYuGothic, Yu Gothic, YuGothic, sans-serif;
+    font-family:
+      AdjustedYuGothic,
+      Yu Gothic,
+      YuGothic,
+      sans-serif;
   }
 
   body {
