@@ -1,5 +1,3 @@
-import { getAssetPath } from "@/functions/assetPath"
-
 export const BuyMeCoffee = () => {
   return (
     <div className="flex flex-col items-center gap-8 py-4">
@@ -10,7 +8,7 @@ export const BuyMeCoffee = () => {
         rel="noreferrer"
       >
         <img
-          src={getAssetPath("/assets/coffee_button.webp")}
+          src="/assets/coffee_button.webp"
           alt="Buy Me A Coffeeのbutton"
           width={200}
           height={60}
