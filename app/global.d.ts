@@ -8,7 +8,7 @@ type Head = {
 
 declare module "hono" {
   interface ContextRenderer {
-    // biome-ignore lint/style/useShorthandFunctionType:
+    // biome-ignore lint/style/useShorthandFunctionType: interface declaration needs call signature format
     (
       content: string | Promise<string>,
       head?: Head,

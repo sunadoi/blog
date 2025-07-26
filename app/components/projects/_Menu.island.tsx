@@ -34,13 +34,17 @@ export const Menu = () => {
         </div>
       </button>
       {isOpen && (
-        <>
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: */}
-          <div
-            class="fixed z-20 bg-transparent w-full h-full"
-            onClick={toggleDialog}
-          />
-        </>
+        // biome-ignore lint/a11y/noStaticElementInteractions: for closing dialog
+        <div
+          class="fixed z-20 bg-transparent w-full h-full"
+          onClick={toggleDialog}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault()
+              toggleDialog()
+            }
+          }}
+        />
       )}
       <dialog
         id="menu-dialog"

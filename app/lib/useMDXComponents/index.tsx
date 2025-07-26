@@ -1,7 +1,7 @@
-import { FileIconMap } from "@/constants/fileIconMap"
 // reactコンポーネント前提の型定義なので、MDXComponentsの型定義は使わない
 // import type { MDXComponents } from "mdx/types"
 import type { JSX } from "hono/jsx/jsx-runtime"
+import { FileIconMap } from "@/constants/fileIconMap"
 import { Anchor } from "./Anchor"
 import { EmbedLink } from "./EmbedLink"
 import { Img } from "./Image"

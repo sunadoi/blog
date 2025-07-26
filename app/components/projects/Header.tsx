@@ -1,5 +1,5 @@
-import { siteName } from "@/constants/site"
 import { tv } from "tailwind-variants"
+import { siteName } from "@/constants/site"
 import { ThemeButton } from "../parts/_Theme.island"
 import { Menu } from "./_Menu.island"
 

@@ -1,22 +1,16 @@
+import { createRoute } from "honox/factory"
 import { Card } from "@/components/parts/Card"
 import { GitHubIcon } from "@/components/parts/icons/GitHub"
 import { RSSIcon } from "@/components/parts/icons/RSS"
 import { SizumeIcon } from "@/components/parts/icons/Sizume"
 import { XIcon } from "@/components/parts/icons/X"
 import { BuyMeCoffee } from "@/components/projects/BuyMeCoffee"
-import { getAssetPath } from "@/functions/assetPath"
-import { createRoute } from "honox/factory"
 
 export default createRoute(async (c) => {
   return c.render(
     <div class="grid place-items-center gap-10 my-10 mx-4">
       <div>
-        <img
-          src={getAssetPath("/assets/me.webp")}
-          alt="icon"
-          width={200}
-          height={200}
-        />
+        <img src="/assets/me.webp" alt="icon" width={200} height={200} />
       </div>
       <div class="w-full max-w-md">
         <Card>

@@ -1,6 +1,6 @@
 import clsx from "clsx"
 import type { JSX } from "hono/jsx/jsx-runtime"
-import { type VariantProps, tv } from "tailwind-variants"
+import { tv, type VariantProps } from "tailwind-variants"
 
 export const Badge = ({
   Icon,

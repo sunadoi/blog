@@ -1,3 +1,4 @@
+import type { JSX } from "hono/jsx/jsx-runtime"
 import { AWSIcon } from "@/components/parts/icons/AWS"
 import { CloudflareIcon } from "@/components/parts/icons/Cloudflare"
 import { CloudflareWorkersIcon } from "@/components/parts/icons/CloudflareWorkers"
@@ -27,7 +28,6 @@ import { TerraformIcon } from "@/components/parts/icons/Terraform"
 import { TypeScriptIcon } from "@/components/parts/icons/TypeScript"
 import { ViteIcon } from "@/components/parts/icons/Vite"
 import { VitestIcon } from "@/components/parts/icons/Vitest"
-import type { JSX } from "hono/jsx/jsx-runtime"
 
 export type ArticleIconKey =
   | "ブラウザ"

@@ -1,8 +1,8 @@
+import { createRoute } from "honox/factory"
 import { Badge } from "@/components/parts/Badge"
 import { Card } from "@/components/parts/Card"
 import { type ArticleIconKey, ArticleIconMap } from "@/constants/articleIconMap"
 import { getArticles } from "@/functions/articles"
-import { createRoute } from "honox/factory"
 
 export default createRoute(async (c) => {
   const { tagCount } = await getArticles()

@@ -1,7 +1,7 @@
-import { baseURL, siteName } from "@/constants/site"
-import { getArticles } from "@/functions/articles"
 import { Feed } from "feed"
 import { createRoute } from "honox/factory"
+import { baseURL, siteName } from "@/constants/site"
+import { getArticles } from "@/functions/articles"
 
 export default createRoute(async (c) => {
   const feeds = await generateRssFeed()

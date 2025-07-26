@@ -1,6 +1,6 @@
 import clsx from "clsx"
 import { useEffect, useState } from "hono/jsx"
-import { destroy, init } from "tocbot"
+import tocbot from "tocbot"
 import { Card } from "../parts/Card"
 import { TocIcon } from "../parts/icons/Toc"
 
@@ -13,13 +13,13 @@ export const Toc = () => {
     if (!import.meta.env.DEV && import.meta.env.MODE !== "client") return
     if (!window.matchMedia(largerThanLg).matches) return
 
-    init({
+    tocbot.init({
       tocSelector: ".toc",
       contentSelector: ".article",
       headingSelector: "h2, h3",
       scrollSmoothOffset: -10,
     })
-    return () => destroy()
+    return () => tocbot.destroy()
   }, [])
 
   return (
@@ -40,13 +40,13 @@ export const TocButton = () => {
     if (!import.meta.env.DEV && import.meta.env.MODE !== "client") return
     if (window.matchMedia(largerThanLg).matches) return
 
-    init({
+    tocbot.init({
       tocSelector: ".toc-dialog",
       contentSelector: ".article",
       headingSelector: "h2, h3",
       scrollSmoothOffset: -10,
     })
-    return () => destroy()
+    return () => tocbot.destroy()
   }, [])
 
   const toggleDialog = () => {
@@ -74,10 +74,17 @@ export const TocButton = () => {
         </div>
       </button>
       {isOpen && (
-        <>
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: */}
-          <div class="fixed z-20 top-0 w-full h-full" onClick={toggleDialog} />
-        </>
+        // biome-ignore lint/a11y/noStaticElementInteractions: for closing dialog
+        <div
+          class="fixed z-20 top-0 w-full h-full"
+          onClick={toggleDialog}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault()
+              toggleDialog()
+            }
+          }}
+        />
       )}
       <dialog
         id="toc-dialog"
@@ -87,8 +94,16 @@ export const TocButton = () => {
         )}
       >
         <Card type="wide" hasBorder>
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: */}
-          <div onClick={toggleDialog}>
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: for closing dialog */}
+          <div
+            onClick={toggleDialog}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                toggleDialog()
+              }
+            }}
+          >
             <p class="font-semibold border-b pb-1 mb-2">目次</p>
             {/* tocbotによってここにマウントされる */}
             <div class="toc-dialog" />
