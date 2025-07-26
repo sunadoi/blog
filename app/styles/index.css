@@ -34,7 +34,6 @@
 
   body {
     @apply bg-background text-foreground;
-    height: 100vh;
     height: 100dvh;
     box-sizing: border-box;
   }
@@ -57,7 +56,7 @@
   }
 
   @view-transition {
-    /* biome-ignore lint/correctness/noUnknownProperty: */
+    /* biome-ignore lint/correctness/noUnknownProperty: CSS View Transitions API property */
     navigation: auto;
   }
 }

@@ -74,10 +74,17 @@ export const TocButton = () => {
         </div>
       </button>
       {isOpen && (
-        <>
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: */}
-          <div class="fixed z-20 top-0 w-full h-full" onClick={toggleDialog} />
-        </>
+        // biome-ignore lint/a11y/noStaticElementInteractions: for closing dialog
+        <div
+          class="fixed z-20 top-0 w-full h-full"
+          onClick={toggleDialog}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault()
+              toggleDialog()
+            }
+          }}
+        />
       )}
       <dialog
         id="toc-dialog"
@@ -87,8 +94,16 @@ export const TocButton = () => {
         )}
       >
         <Card type="wide" hasBorder>
-          {/* biome-ignore lint/a11y/useKeyWithClickEvents: */}
-          <div onClick={toggleDialog}>
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: for closing dialog */}
+          <div
+            onClick={toggleDialog}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                toggleDialog()
+              }
+            }}
+          >
             <p class="font-semibold border-b pb-1 mb-2">目次</p>
             {/* tocbotによってここにマウントされる */}
             <div class="toc-dialog" />
