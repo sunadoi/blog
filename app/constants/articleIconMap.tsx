@@ -1,5 +1,6 @@
 import type { JSX } from "hono/jsx/jsx-runtime"
 import { AWSIcon } from "@/components/parts/icons/AWS"
+import { ClaudeAIIcon } from "@/components/parts/icons/ClaudeAI"
 import { CloudflareIcon } from "@/components/parts/icons/Cloudflare"
 import { CloudflareWorkersIcon } from "@/components/parts/icons/CloudflareWorkers"
 import { DBIcon } from "@/components/parts/icons/DB"
@@ -63,6 +64,7 @@ export type ArticleIconKey =
   | "DevOps"
   | "データ"
   | "Renovate"
+  | "Claude AI"
 
 export const ArticleIconMap = new Map<
   ArticleIconKey,
@@ -101,4 +103,5 @@ export const ArticleIconMap = new Map<
   ["DevOps", "⚙️"],
   ["データ", DBIcon],
   ["Renovate", RenovateIcon],
+  ["Claude AI", ClaudeAIIcon],
 ])
