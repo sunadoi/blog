@@ -12,6 +12,7 @@ import remarkBreaks from "remark-breaks"
 import rehypePrettyCode from "rehype-pretty-code"
 import rehypeAutolinkHeadings from "rehype-autolink-headings"
 import rehypeSlug from "rehype-slug"
+import rehypeMermaid from "rehype-mermaid"
 import Sitemap from "vite-plugin-sitemap"
 import { baseURL } from "./app/constants/site"
 
@@ -61,6 +62,7 @@ export default defineConfig(({ mode }) => {
               remarkGfm,
             ],
             rehypePlugins: [
+              [rehypeMermaid, { strategy: "inline-svg" }],
               [rehypePrettyCode, { theme: "monokai" }],
               rehypeSlug,
               [rehypeAutolinkHeadings, { behavior: "wrap" }],

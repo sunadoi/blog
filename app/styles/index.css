@@ -1,6 +1,7 @@
 @import "./syntax-hilight.css";
 @import "./color.css";
 @import "./toc.css";
+@import "./mermaid.css";
 
 @tailwind base;
 @tailwind components;
