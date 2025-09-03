@@ -1,0 +1,21 @@
+/* Mermaid diagram styles - target SVG with mermaid ID */
+svg[id^="mermaid-"] {
+  @apply mx-auto my-2;
+}
+
+/* Apply filter to invert colors in dark mode */
+.dark svg[id^="mermaid-"] {
+  filter: invert(0.8) hue-rotate(180deg) brightness(1.05);
+}
+
+/* Responsive sizing */
+@media (max-width: 640px) {
+  figure:has(svg[id^="mermaid-"]) {
+    @apply p-2;
+  }
+
+  svg[id^="mermaid-"] {
+    max-width: 100%;
+    height: auto;
+  }
+}
