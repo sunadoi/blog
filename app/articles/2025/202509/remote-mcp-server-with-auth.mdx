@@ -23,6 +23,11 @@ Cognito前提で記載しますが、おそらく他の認可サーバーでも�
 
 MCPサーバーにおける認可周りのトピックがメインなので、基本的なOAuth 2.0のフローと認可なしのMCPサーバーの実装自体は割愛します。
 
+<Message type="warn">
+十分調査した上で記事を書いたつもりですが、
+誤りがあったりセキュリティ的に問題がある記述がありましたら教えていただけると嬉しいです
+</Message>
+
 ## アーキテクチャ概要
 
 今回作成するMCPサーバーはAPIサーバーのproxyとして動作します。
@@ -267,16 +272,16 @@ sequenceDiagram
     Client->>Browser: Open browser with authorization URL + code_challenge + resource
     rect rgb(240, 240, 240)
       Browser->>Server: Authorization request with resource parameter
-      Server->>Server: Set proxyState encoding the original MCP Client information in state<br/> proxyState = base64({original_redirect_uri, original_state})
+      Server->>Server: Store the original MCP Client information in key-value storage where:<br/>- Key: nonce<br/>- Value: {original_redirect_uri, original_state}
       Server->>Browser: HTTP 302 Redirect
-      Browser->>Cognito: Authorization request<br/>(redirect_uri=MCP Server/oauth2/callback, state=proxyState)
+      Browser->>Cognito: Authorization request<br/>(redirect_uri=MCP Server/oauth2/callback, state=nonce)
     end
 
     Note over Cognito: User authorizes
     Cognito->>Browser: Redirect to callback with authorization code
     rect rgb(240, 240, 240)
-      Browser->>Server: Authorization code callback with proxyState
-      Server->>Server: Decode proxyState to restore the original MCP Client information<br/>(original_redirect_uri, original_state)
+      Browser->>Server: Authorization code callback with nonce
+      Server->>Server: Restore the original MCP Client information from key-value storage<br/>using the state (nonce) as key
       Server->>Browser: HTTP 302 Redirect to original_redirect_uri
       Browser->>Client: Authorization code callback with code + original_state
     end
@@ -370,7 +375,7 @@ app.get("/.well-known/oauth-authorization-server", (c) => {
     grant_types_supported: ["authorization_code", "refresh_token"],
     code_challenge_methods_supported: ["S256"],
     scopes_supported: ["openid", "profile", "email"],
-    token_endpoint_auth_methods_supported: ["client_secret_basic"],
+    token_endpoint_auth_methods_supported: ["none"],
     token_endpoint: `${resourceUri}/oauth2/token`, // CognitoではなくMCPサーバーのURLを指定
   })
 })
@@ -420,7 +425,7 @@ app.post("/register", async (c) => {
     client_id_issued_at: Math.floor(Date.now() / 1000),
     redirect_uris: requestBody.redirect_uris,
     grant_types: requestBody.grant_types || ["authorization_code", "refresh_token"],
-    token_endpoint_auth_method: "client_secret_basic",
+    token_endpoint_auth_method: "none",
     client_name: requestBody.client_name || "MCP Client",
   })
 })
@@ -457,32 +462,37 @@ sequenceDiagram
     Note over Client: Generate PKCE parameters<br/>Include resource parameter
     Client->>Browser: Open browser with authorization URL + code_challenge + resource
     Browser->>Server: Authorization request with resource parameter
-    Server->>Server: Set proxyState encoding the original MCP Client information in state<br/> proxyState = base64({original_redirect_uri, original_state})
-    Server->>Browser: HTTP 302 Redirect
-    Browser->>Cognito: Authorization request<br/>(redirect_uri=MCP Server/oauth2/callback, state=proxyState)
+    Server->>Server: Store the original MCP Client information in key-value storage where:<br/>- Key: nonce<br/>- Value: {original_redirect_uri, original_state}
+      Server->>Browser: HTTP 302 Redirect
+      Browser->>Cognito: Authorization request<br/>(redirect_uri=MCP Server/oauth2/callback, state=nonce)
 ```
 
 処理内容としてはリクエストの内容を組み立てて、ブラウザにリダイレクトさせるだけですが、ここでのポイントは以下です。
-- リクエスト中のMCPクライアントが発行したstateとredirect_uriをエンコードしたものをstateに格納しておく
+- リクエスト中のMCPクライアントが発行したstateとredirect_uriをランダムな値をkeyにしたKVに格納しておく (短めのTTLを設定)
+- stateには上記KVのkeyを格納する
 - リダイレクトURIをMCPサーバーのエンドポイントに設定する
 
 Cognitoのクライアントでは、このMCPサーバーのcallbackエンドポイントをリダイレクトURIに設定しておく必要があります。
 逆に言えば、このcallbackエンドポイント1つをリダイレクトURIとして登録してさえいれば、MCPクライアントごとに異なるリダイレクトURIを個別設定する必要がなくなるとも言えます。
+MCPクライアントのリダイレクトURIをホワイトリスト的に検証しておくと、セキュアになるかと思います。
 
-```ts {7-13,19,21}
+```ts {14-16,22,24}
 app.get("/oauth2/authorize", async (c) => {
   const cognitoDomain = process.env.COGNITO_DOMAIN || ""
   const resourceUri = process.env.RESOURCE_URI || "http://localhost:8081"
 
   const query = c.req.query()
+  if (new URL(query.resource).href !== new URL(resourceUri).href) {
+    return c.json({ error: "invalid_resource" }, 400)
+  }
 
-  // MCPクライアントの情報をstateにエンコード
-  const proxyState = Buffer.from(
-    JSON.stringify({
-      redirect_uri: query.redirect_uri,
-      original_state: query.state,
-    })
-  ).toString("base64")
+  if (!isAllowedRedirectUri(query.redirect_uri)) {
+    return c.json({ error: "invalid_request" }, 400)
+  }
+
+  // MCPクライアントの情報を適当なKVに保存しておく
+  const nonce = crypto.randomUUID()
+  kv.set(nonce, { original_redirect_uri: query.redirect_uri, original_state: query.state, iat: Date.now() })
 
   return c.redirect(
     `${cognitoDomain}/oauth2/authorize?${new URLSearchParams({
@@ -490,9 +500,10 @@ app.get("/oauth2/authorize", async (c) => {
       client_id: query.client_id,
       redirect_uri: `${resourceUri}/oauth2/callback`, // MCPサーバーのcallback URL
       scope: query.scope || "email openid profile",
-      state: proxyState,
+      state: nonce,
       code_challenge: query.code_challenge,
       code_challenge_method: "S256",
+      resource: query.resource,
     }).toString()}`
   )
 })
@@ -525,25 +536,30 @@ sequenceDiagram
 
     Note over Cognito: User authorizes
     Cognito->>Browser: Redirect to callback with authorization code
-    Browser->>Server: Authorization code callback with proxyState
-    Server->>Server: Decode proxyState to restore the original MCP Client information<br/>(original_redirect_uri, original_state)
+    Browser->>Server: Authorization code callback with nonce
+    Server->>Server: Restore the original MCP Client information from key-value storage<br/>using the state (nonce) as key
     Server->>Browser: HTTP 302 Redirect to original_redirect_uri
     Browser->>Client: Authorization code callback with code + original_state
 ```
 
 以下がcallbackエンドポイントの実装です。
-先ほどの認可エンドポイントでエンコードしたstateをデコードすると、元々のMCPクライアントのstateとredirect_uriを取得できるので、これを元にMCPクライアントにリダイレクトさせます。
+stateの値を用いて先ほどの認可エンドポイントでKVに格納した値を取得すると、元々のMCPクライアントのstateとredirect_uriを取得できるので、これを元にMCPクライアントにリダイレクトさせます。
 
 ```ts
 app.get("/oauth2/callback", async (c) => {
   const code = c.req.query("code") || ""
   const state = c.req.query("state") || ""
 
-  const decodedState = JSON.parse(Buffer.from(state, "base64").toString())
+  // 認可リクエスト時にKVに格納した値から元のclient情報を取得
+  const proxyState = kv.get(state)
+  if (!proxyState) {
+    return c.json({ error: "invalid_state" }, 400)
+  }
+  kv.delete(state)
 
-  const redirectUrl = new URL(decodedState.redirect_uri)
+  const redirectUrl = new URL(proxyState.original_redirect_uri)
   redirectUrl.searchParams.set("code", code)
-  redirectUrl.searchParams.set("state", decodedState.original_state)
+  redirectUrl.searchParams.set("state", proxyState.original_state)
 
   return c.redirect(redirectUrl.toString())
 })
@@ -620,6 +636,10 @@ app.post("/oauth2/token", async (c) => {
         scope?: string
       }
 
+  if (body.resource && new URL(body.resource).href !== new URL(resourceUri).href) {
+    return c.json({ error: "invalid_resource" }, 400)
+  }
+
   const cognitoRequestBody: CognitoRequestBody =
     body.grant_type === "authorization_code"
       ? {
@@ -628,6 +648,7 @@ app.post("/oauth2/token", async (c) => {
           redirect_uri: `${resourceUri}/oauth2/callback`, // 固定のcallback URL
           client_id: cognitoClientId,
           code_verifier: body.code_verifier,
+          ...(body.resource ? { resource: body.resource } : {}),
         }
       : {
           grant_type: body.grant_type,
