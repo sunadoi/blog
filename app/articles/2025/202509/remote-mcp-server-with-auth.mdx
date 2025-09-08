@@ -599,23 +599,6 @@ sequenceDiagram
 これはシンプルにCognitoのtokenエンドポイントを叩いて、得られたレスポンスをそのまま返却しているだけです。
 
 ```ts
-type CognitoRequestBody =
-  | {
-      grant_type: "authorization_code"
-      code: string
-      redirect_uri: string
-      client_id: string
-      code_verifier: string
-      resource?: string
-    }
-  | {
-      grant_type: "refresh_token"
-      refresh_token: string
-      client_id: string
-      resource?: string
-      scope?: string
-    }
-
 app.post("/oauth2/token", async (c) => {
   const resourceUri = process.env.RESOURCE_URI || "http://localhost:8081"
   const cognitoDomain = process.env.COGNITO_DOMAIN || ""
@@ -640,7 +623,7 @@ app.post("/oauth2/token", async (c) => {
     return c.json({ error: "invalid_resource" }, 400)
   }
 
-  const cognitoRequestBody: CognitoRequestBody =
+  const cognitoRequestBody =
     body.grant_type === "authorization_code"
       ? {
           grant_type: body.grant_type,
@@ -671,19 +654,55 @@ app.post("/oauth2/token", async (c) => {
 })
 ```
 
-一見、この処理はproxyする必要がないようにも思いますが、OAuth 2.0ではtokenリクエストでのリダイレクトURIは認可リクエストのものと同じにする必要があります。
+一見、この処理はproxyする必要がないようにも思いますが、OAuth 2.0ではトークンリクエストでのリダイレクトURIは認可リクエストのものと同じにする必要があります。
 
-ちなみに、OAuth 2.1ではtokenリクエストでのリダイレクトURIは不要となります。
+ちなみに、OAuth 2.1ではトークンリクエストでのリダイレクトURIは不要となります。
 元々これは認可コードのインジェクションを防ぐ目的で必要とされていました。そもそもOAuth 2.1ではPKCEの利用が必須となるためお役御免となり不要となるようです。
 >In OAuth 2.1, authorization code injection is prevented by the code_challenge and code_verifier parameters, making the inclusion of the redirect_uri parameter serve no purpose in the token request.  As such, it has been removed.
 > *https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-12#name-redirect-uri-parameter-in-t*
 
 現状、認可サーバーはdraft状態のOAuth 2.1をサポートしていないため、当面はリダイレクトURIを指定する必要があるということになります。
 
+### 5. refresh_tokenによる更新
+
+シーケンス図に記載したフローは完遂したわけですが、最後にアクセストークンの有効期限が切れた場合のリフレッシュトークンによる更新処理について見ていきます。
+
+MCP仕様書には具体的な記載はなかったのですが、少なくともClaude Codeでは401が返されるとtokenエンドポイントに対して`grant_type=refresh_token`でリクエストするようになっていました。おそらくどのクライアントでも同じ挙動になるのではないかと思います。
+
+より正確には一度`/.well-known/oauth-authorization-server`を叩いて`token_endpoint`を取得し、トークンリクエストを行っていました。
+
+```mermaid
+sequenceDiagram
+    participant Client as MCP Client
+    participant Server as MCP Server<br/>(Resource Server & Authorization Proxy)
+    participant Cognito as AWS Cognito<br/>(Authorization Server)
+
+    Client->>Server: MCP Request with expired access token
+    Server->>Client: HTTP 401 Unauthorized
+    Client->>Server: GET /.well-known/oauth-authorization-server
+    Server->>Client: Authorization server metadata response
+    Client->>Server: Token request + refresh_token
+    Server->>Cognito: Token request + refresh_token
+    Cognito->>Server: Access token + refresh token (rotated)
+    Server->>Client: Access token + refresh token (rotated)
+```
+
+MCP仕様書およびOAuth 2.1ではPublic Clientの場合にはリフレッシュトークンのローテーションが必須である旨が記載されています。
+
+> For public clients, authorization servers MUST rotate refresh tokens as described in OAuth 2.1 Section 4.3.1 “Token Endpoint Extension”.
+
+今回の場合、認可サーバーから見たクライアント種別はConfidential Clientですが、トークンを保管するクライアントはPublic相当なのでリフレッシュトークンのローテーションは対応した方がよいでしょう。
+ちょうど数ヶ月前に[Cognitoでリフレッシュトークンのローテーションがサポート](https://aws.amazon.com/about-aws/whats-new/2025/04/amazon-cognito-refresh-token-rotation/)されたので、これをONにします。
+すると、レスポンスされるリフレッシュトークンが更新されるようになります。
+
+
+## 調査メモ
+
+実装する上で気になったことや、実装には含めなかったが仕様に記載してある内容の調査結果を軽くまとめておきます。
+
 ### 認可エンドポイントとtokenエンドポイントのproxyの必要性
 
-ここまで見てきたように、認可リクエストとtokenリクエストもproxyさせることで、
-DCRがサポートされていない中でもあらゆるMCPクライアントに対してリダイレクトURIを固定することができました。
+認可リクエストとトークンリクエストもproxyさせることで、DCRがサポートされていない中でもあらゆるMCPクライアントに対してリダイレクトURIを固定することができました。
 その代償として、実装およびフローが複雑になった感は否めません。
 
 仮にあらゆるMCPクライアントをサポートせず、特定のMCPクライアントのみ利用するということであれば、
@@ -694,7 +713,7 @@ DCRがサポートされていない中でもあらゆるMCPクライアント�
 
 ### Resource Indicatorsのサポート
 
-ここまでで無事疎通が行えるようになりましたが、MCP仕様書に含まれていて登場していない仕様としてResource Indicatorsがあります。
+MCP仕様書に含まれていて登場していない仕様としてResource Indicatorsがあります。
 Resource Indicatorsは、[RFC 8707](https://datatracker.ietf.org/doc/rfc8707/)で定義されたOAuth 2.0の拡張仕様です。
 
 詳細は割愛しますが、ざっくり言うと複数のリソースサーバーがある状況において、クライアントがアクセストークンを使ってリクエストするリソースサーバーを明示的に指定できるようにするための仕組みです。
@@ -712,7 +731,7 @@ GET /oauth2/authorize?response_type=code
   &resource=https%3A%2F%2Fapi.example.com HTTP/1.1
 ```
 
-得られたaccess tokenをデコードしてみると`aud`フィールドに、指定したリソースサーバーのURLが格納されています。
+得られたaccess tokenをデコードすると`aud`フィールドに、指定したリソースサーバーのURLが格納されています。
 
 ```json
 {
@@ -760,13 +779,6 @@ localhostでもdeployしたサーバーでも問題なく動作しました。
 
 <Img src="/assets/article/remote-mcp-server-with-auth/use-mcp.webp" width="50%" />
 
-ただし、今回はリフレッシュトークンによるトークンの更新までは確認できていません。
-同内容のissueが立っているので、もしかしたらclaude codeはまだ対応できていないのかもしれません。
-
-<EmbedLink url="https://github.com/anthropics/claude-code/issues/5706" />
-
-この辺は過渡期ということもあり、認可サーバー同様、MCPクライアント側も対応状況がまちまちですね...
-
 ### Claude Desktop
 
 connectorを設定して接続を試みたのですが、残念ながらログイン画面でclient idが異なるエラーに遭遇してうまくいきませんでした。
@@ -792,7 +804,7 @@ OAuth 2.1自体がdraftであることを考えると仕方ないのかもしれ
 そのおかげ(?)か、RFCを始めとして様々な資料を読み込んで調査&手元で検証しつつ進められたので理解はかなり進みました。
 
 自分たちが開発している管理画面の操作をMCP経由でできると色々と捗りそうです。
-今後の展開に期待したいところです。
+全体的にもう少しシンプルに構成できると嬉しいので、各種認可サーバーおよびMCPクライアントの今後の展開に期待したいところです。
 
 ## 参考
 
