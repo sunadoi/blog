@@ -15,6 +15,7 @@ import { GoIcon } from "@/components/parts/icons/Go"
 import { HonoIcon } from "@/components/parts/icons/Hono"
 import { JavaScriptIcon } from "@/components/parts/icons/JavaScript"
 import { LinuxIcon } from "@/components/parts/icons/Linux"
+import { MCPIcon } from "@/components/parts/icons/MCP"
 import { MySQLIcon } from "@/components/parts/icons/MySQL"
 import { NestJSIcon } from "@/components/parts/icons/NestJS"
 import { NextJSIcon } from "@/components/parts/icons/NextJS"
@@ -65,6 +66,7 @@ export type ArticleIconKey =
   | "データ"
   | "Renovate"
   | "Claude AI"
+  | "MCP"
 
 export const ArticleIconMap = new Map<
   ArticleIconKey,
@@ -104,4 +106,5 @@ export const ArticleIconMap = new Map<
   ["データ", DBIcon],
   ["Renovate", RenovateIcon],
   ["Claude AI", ClaudeAIIcon],
+  ["MCP", MCPIcon],
 ])
