@@ -1,3 +1,13 @@
+.toc {
+  max-height: calc(100dvh - 12rem);
+  overflow-y: auto;
+}
+
+.toc-dialog {
+  max-height: calc(100dvh - 18rem);
+  overflow-y: auto;
+}
+
 .toc-list-item {
   line-height: 2;
   font-size: 0.8rem;
