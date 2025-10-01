@@ -4,6 +4,9 @@ type Head = {
   title?: string
   description?: string
   ogImagePath?: string
+  publishedAt?: string
+  updatedAt?: string
+  tags?: string[]
 }
 
 declare module "hono" {

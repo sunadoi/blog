@@ -105,6 +105,9 @@ export default createRoute(
         title: article?.frontmatter.title,
         description: article?.frontmatter.description,
         ogImagePath: new URL(`/ogimage/${slug}.png`, baseURL).toString(),
+        publishedAt: article?.frontmatter.publishedAt,
+        updatedAt: article?.frontmatter.updatedAt,
+        tags: article?.frontmatter.tags,
       },
     )
   },
