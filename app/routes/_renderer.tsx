@@ -6,14 +6,31 @@ import { baseURL, siteName } from "@/constants/site"
 import { getCanonicalURL } from "@/functions/url"
 
 export default jsxRenderer(
-  async ({ children, title, description, ogImagePath, publishedAt, updatedAt, tags }) => {
+  async ({
+    children,
+    title,
+    description,
+    ogImagePath,
+    publishedAt,
+    updatedAt,
+    tags,
+  }) => {
     const pageTitle = title ? `${title} | ${siteName}` : siteName
     const siteDescription = description ?? `${siteName} is a tech blog`
     const c = useRequestContext()
     const canonicalURL = getCanonicalURL(c.req.url)
 
     const isArticlePage = !!title && !!publishedAt
-    const jsonLd = getJSONLD(isArticlePage, title, siteDescription, ogImagePath, publishedAt, updatedAt, tags, canonicalURL)
+    const jsonLd = getJSONLD(
+      isArticlePage,
+      title,
+      siteDescription,
+      ogImagePath,
+      publishedAt,
+      updatedAt,
+      tags,
+      canonicalURL,
+    )
 
     return (
       <html lang="ja">
@@ -28,7 +45,10 @@ export default jsxRenderer(
           <meta property="og:title" content={pageTitle} />
           <meta property="og:description" content={siteDescription} />
           <meta property="og:url" content={canonicalURL} />
-          <meta property="og:type" content={isArticlePage ? "article" : "website"} />
+          <meta
+            property="og:type"
+            content={isArticlePage ? "article" : "website"}
+          />
           <meta
             property="og:image"
             content={ogImagePath || `${baseURL}/favicon.ico`}
@@ -54,6 +74,7 @@ export default jsxRenderer(
           />
           <script
             type="application/ld+json"
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: no injection
             dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
           />
           {import.meta.env.PROD ? (
@@ -123,51 +144,51 @@ const getJSONLD = (
   canonicalURL: string,
 ) => {
   return isArticlePage
-  ? {
-      "@context": "https://schema.org",
-      "@type": "BlogPosting",
-      headline: title,
-      description: description,
-      image: ogImagePath || `${baseURL}/favicon.ico`,
-      datePublished: publishedAt,
-      dateModified: updatedAt || publishedAt,
-      author: {
-        "@type": "Person",
-        name: "sunadoi",
-        url: `${baseURL}/about`,
-      },
-      publisher: {
-        "@type": "Organization",
-        name: siteName,
-        logo: {
-          "@type": "ImageObject",
-          url: `${baseURL}/favicon.ico`,
+    ? {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        headline: title,
+        description: description,
+        image: ogImagePath || `${baseURL}/favicon.ico`,
+        datePublished: publishedAt,
+        dateModified: updatedAt || publishedAt,
+        author: {
+          "@type": "Person",
+          name: "sunadoi",
+          url: `${baseURL}/about`,
         },
-      },
-      mainEntityOfPage: {
-        "@type": "WebPage",
-        "@id": canonicalURL,
-      },
-      keywords: tags?.join(","),
-    }
-  : {
-      "@context": "https://schema.org",
-      "@type": "Blog",
-      name: siteName,
-      url: baseURL,
-      description: description,
-      author: {
-        "@type": "Person",
-        name: "sunadoi",
-        url: `${baseURL}/about`,
-      },
-      publisher: {
-        "@type": "Organization",
-        name: siteName,
-        logo: {
-          "@type": "ImageObject",
-          url: `${baseURL}/favicon.ico`,
+        publisher: {
+          "@type": "Organization",
+          name: siteName,
+          logo: {
+            "@type": "ImageObject",
+            url: `${baseURL}/favicon.ico`,
+          },
         },
-      },
-    }
+        mainEntityOfPage: {
+          "@type": "WebPage",
+          "@id": canonicalURL,
+        },
+        keywords: tags?.join(","),
+      }
+    : {
+        "@context": "https://schema.org",
+        "@type": "Blog",
+        name: siteName,
+        url: baseURL,
+        description: description,
+        author: {
+          "@type": "Person",
+          name: "sunadoi",
+          url: `${baseURL}/about`,
+        },
+        publisher: {
+          "@type": "Organization",
+          name: siteName,
+          logo: {
+            "@type": "ImageObject",
+            url: `${baseURL}/favicon.ico`,
+          },
+        },
+      }
 }
