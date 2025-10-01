@@ -6,11 +6,14 @@ import { baseURL, siteName } from "@/constants/site"
 import { getCanonicalURL } from "@/functions/url"
 
 export default jsxRenderer(
-  async ({ children, title, description, ogImagePath }) => {
+  async ({ children, title, description, ogImagePath, publishedAt, updatedAt, tags }) => {
     const pageTitle = title ? `${title} | ${siteName}` : siteName
     const siteDescription = description ?? `${siteName} is a tech blog`
     const c = useRequestContext()
     const canonicalURL = getCanonicalURL(c.req.url)
+
+    const isArticlePage = !!title && !!publishedAt
+    const jsonLd = getJSONLD(isArticlePage, title, siteDescription, ogImagePath, publishedAt, updatedAt, tags, canonicalURL)
 
     return (
       <html lang="ja">
@@ -25,17 +28,33 @@ export default jsxRenderer(
           <meta property="og:title" content={pageTitle} />
           <meta property="og:description" content={siteDescription} />
           <meta property="og:url" content={canonicalURL} />
-          <meta property="og:type" content="article" />
+          <meta property="og:type" content={isArticlePage ? "article" : "website"} />
           <meta
             property="og:image"
             content={ogImagePath || `${baseURL}/favicon.ico`}
           />
           <meta property="og:locale:alternate" content="ja_JP" />
+          {isArticlePage && publishedAt && (
+            <>
+              <meta property="article:published_time" content={publishedAt} />
+              {updatedAt && (
+                <meta property="article:modified_time" content={updatedAt} />
+              )}
+              <meta property="article:author" content="sunadoi" />
+              {tags?.map((tag) => (
+                <meta property="article:tag" content={tag} />
+              ))}
+            </>
+          )}
           <meta name="twitter:card" content="summary_large_image" />
           <meta name="twitter:site" content="@suna_tech" />
           <meta
             name="twitter:image"
             content={ogImagePath || `${baseURL}/favicon.ico`}
+          />
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
           />
           {import.meta.env.PROD ? (
             <script src="/static/theme.js" />
@@ -92,3 +111,63 @@ export default jsxRenderer(
     )
   },
 )
+
+const getJSONLD = (
+  isArticlePage: boolean,
+  title: string | undefined,
+  description: string,
+  ogImagePath: string | undefined,
+  publishedAt: string | undefined,
+  updatedAt: string | undefined,
+  tags: string[] | undefined,
+  canonicalURL: string,
+) => {
+  return isArticlePage
+  ? {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      headline: title,
+      description: description,
+      image: ogImagePath || `${baseURL}/favicon.ico`,
+      datePublished: publishedAt,
+      dateModified: updatedAt || publishedAt,
+      author: {
+        "@type": "Person",
+        name: "sunadoi",
+        url: `${baseURL}/about`,
+      },
+      publisher: {
+        "@type": "Organization",
+        name: siteName,
+        logo: {
+          "@type": "ImageObject",
+          url: `${baseURL}/favicon.ico`,
+        },
+      },
+      mainEntityOfPage: {
+        "@type": "WebPage",
+        "@id": canonicalURL,
+      },
+      keywords: tags?.join(","),
+    }
+  : {
+      "@context": "https://schema.org",
+      "@type": "Blog",
+      name: siteName,
+      url: baseURL,
+      description: description,
+      author: {
+        "@type": "Person",
+        name: "sunadoi",
+        url: `${baseURL}/about`,
+      },
+      publisher: {
+        "@type": "Organization",
+        name: siteName,
+        logo: {
+          "@type": "ImageObject",
+          url: `${baseURL}/favicon.ico`,
+        },
+      },
+    }
+}
