@@ -1,0 +1,139 @@
+---
+title: Snowflakeのクエリチューニング ~OR条件をUNIONに書き換える~
+ogImageTitle: Snowflakeのクエリチューニング,~OR条件をUNIONに書き換える~
+description: Snowflakeで実行コストが高いクエリのチューニングをした。JOINのON句でOR条件を複数書いていたものをそれぞれの条件をUNIONするようにして実行時間を30倍高速化した。
+tags: Snowflake
+icon: Snowflake
+publishedAt: 2025/10/04
+updatedAt: 2025/10/04
+---
+
+Snowflakeを運用する中でいつの間にかクエリのコンピューティングコストが高くなってることはあるあるです。
+定期的にコストの見直しを行なって改善策を実行するのですが、今回はその中でも簡単にできてインパクトが大きかった改善策について記載します。
+
+結論から言うと、JOINのON句でOR条件を複数書いていたものをそれぞれの条件をUNIONするようにして実行時間を30倍高速化しました。
+
+Snowflake以外でも効果がありそうですが、今回はSnowflakeの文脈で記載します。
+
+## クエリの修正によるパフォーマンス向上
+
+元々以下のようにJOIN句で複数条件をORで結合したクエリがありました
+
+```sql
+SELECT column1, column2
+FROM table1
+INNER JOIN table2
+  ON table1.id = table2.id
+  AND (
+    table1.foo = table2.foo
+    OR table1.bar = table2.bar
+    OR table1.baz = table2.baz
+  )
+WHERE
+  condition_X = 1
+```
+
+上記はWITH句で複数の条件を記載しているクエリの一部です。
+Snowflakeのクエリプロファイルを見ると、実行時間が1hかかっている中で全体の90%以上の処理がこの部分にかかっていました。
+
+そこでクエリを以下のように変更しました
+
+```sql
+SELECT column1, column2
+FROM table1
+INNER JOIN table2
+  ON table1.id = table2.id
+  AND table1.foo = table2.foo
+WHERE
+  condition_X = 1
+UNION
+SELECT column1, column2
+FROM table1
+INNER JOIN table2
+  ON table1.id = table2.id
+  AND table1.bar = table2.bar
+WHERE
+  condition_X = 1
+UNION
+SELECT column1, column2
+FROM table1
+INNER JOIN table2
+  ON table1.id = table2.id
+  AND table1.baz = table2.baz
+WHERE
+  condition_X = 1
+```
+
+記述自体は長くなりましたが、変更点はJOIN時のOR条件をやめて各条件ごとに抽出したクエリをUNIONで結合しただけです
+これによって、2XLARGEで1hかかっていた処理が2min以内に終わるようになりました
+日次実行クエリなので30万円/月程度のコストカットになります。でかいですね
+
+## パフォーマンス向上の考察
+
+高速化に寄与した要因は複合的に考えられるので一概には言えないですが、Snowflakeの仕組みから考えると分散処理が効率的にできなかったことが大きな要因ではないかと思っています。
+直接的な記述は見当たらなかったので、あくまで推測になります。
+
+Snowflakeではストレージとコンピューティングが分離されており、コンピューティングでは仮想warehouse内の各ノードで分散処理が行われます。
+また、SnowflakeのJOINはほとんどがHash Joinであり、その中でも以下の2種類に分けられます
+
+**1. Broadcast**
+build(左)側で全レコードに対してハッシュテーブルを作成し、それを全てのノードに複製し、probe(右)側との突合を行うというもの。
+
+**2. Hash-Hash**
+build側、probe側両方でハッシュ化したものをそれぞれ各ノードにパーティショニングして処理させるというもの。
+
+<EmbedLink url="https://medium.com/snowflake/the-basics-of-joins-in-snowflake-3da7736075f9" />
+
+一般的には小規模なデータであればBroadcastの方が高速ですが、全てのノードでbuild側の全ハッシュテーブルを持つことになるので、build側のデータが大きくなるにつれてメモリに乗り切らずに遅くなるケースが出てきます。
+そのような大規模データの場合には、Hash-Hashの方が高速です。
+この選定はSnowflake側のクエリオプティマイザで自動的に最適化されます。
+
+今回は大規模データなのでおそらくHash-HashでのJOINが行われています。
+その上で本題に戻ると、JOINの結合時に結合キーによって分散処理をする際に、OR条件になっていると各ノードに最適な分散ができず、パフォーマンスが悪化しているのではないかと考えています。
+Broadcastであれば片方のデータは全てのハッシュテーブルなので問題ないですが、Hash-Hashだとそれぞれのハッシュテーブルを各ノードにパーティショニングさせるので、そこが効率化されないとパフォーマンスが悪化するというのはある程度妥当性があるように思います。
+
+### Where句でも同様の現象になるか？
+
+今回はJOIN時の現象でしたが、Where句でOR条件を設定していても同様にパフォーマンス悪化の原因になるようです。
+この要因は、おそらくパーティショニングプルーニングがうまく効かなくなり、スキャンしなければならないマイクロパーティションが増えてしまうことが要因だと思っています。
+これも直接的な記述は見当たらなかったので、あくまで推測です。
+
+## その他のパフォーマンスチューニングTips
+
+調査中に他にも使えそうなパフォーマンス向上のTipsをいくつか見つけたので記載します。
+
+### Flipped Joinsの回避
+
+先ほどのJOINの仕組み上、Build側を大きいテーブルにしてしまうとFlipped Joinsという現象になりパフォーマンス悪化の原因になるそうです。
+JOINする際は小さいテーブルを左側にするのがベターなようです。
+
+### Where句のカラムへの関数適用を避ける
+
+以下のような記述はカラムの値を変換した上で比較しています。
+これもパーティションプルーニングが効かなくなるのでパフォーマンス悪化の原因になります。
+
+```sql
+where to_char(created_date, 'YYYY-MM-DD') = '2025-10-01'
+```
+
+以下のように記述すると、プルーニングが効くようになります。
+
+```sql
+where created_date = to_date('2025-10-01','YYYY-MM-DD')
+```
+
+これはRDBでもインデックス効かない原因になりますね。
+意識してないとわりとカジュアルにやってしまいそう(というかおそらく既に何ヶ所かでやってしまっている)なので、今後気をつけます...
+
+## まとめ
+
+SnowflakeでJOINのON句で使用していたOR条件をUNIONするように書き直したことにより、30倍高速になり30万円/月程度のコストカットになりました。
+
+仕組みを知らないとカジュアルに書いてしまいそうなので、JOIN時の仕組みを深ぼれたのはよかったです。
+他にもチューニングの知見が得られて勉強になりました。
+
+## 参考
+
+<EmbedLink url="https://articles.analytics.today/improving-snowflake-performance-by-mastering-the-query-profile#heading-disjunctive-or-query" />
+<EmbedLink url="https://medium.com/snowflake/the-basics-of-joins-in-snowflake-3da7736075f9" />
+<EmbedLink url="https://www.youtube.com/watch?v=wFfDbN7wTxU" />
