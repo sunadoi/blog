@@ -5,7 +5,7 @@ description: リクエスト数が増えてもオリジンのDBに負荷をか�
 tags: 設計,Go
 icon: 設計
 publishedAt: 2024/03/20
-updatedAt: 2024/03/20
+updatedAt: 2025/10/03
 ---
 
 高負荷・低レイテンシーなサービスを運用する上でキャッシュは欠かせません。
@@ -13,7 +13,7 @@ updatedAt: 2024/03/20
 
 そして各データをどこにどれくらいの期間でキャッシュとして保持するかは、エンジニアとして腕の見せ所です。
 
-今回は会社の他のチームが実践していたキャッシュ戦略が目から鱗だったので、その方法を備忘録として記載しておきます。
+今回はキャッシュ機構を変更した結果、パフォーマンスがかなり安定したのでその方法を備忘録として記載しておきます。
 そして、実際にその戦略を取り入れた前後での各種メトリクスの変化なども併記します。
 
 なお、一口にキャッシュと言っても様々なレイヤーでのキャッシュがあり得ると思いますが、ここではDBの情報をキャッシュしてアプリケーションサーバーから使用する場合を考えます。
@@ -26,7 +26,25 @@ updatedAt: 2024/03/20
 クライアントからリクエストがあった時に、まずキャッシュサーバーから情報を取得して、取得できなかったらDBから取得し、キャッシュサーバーに格納してクライアントにレスポンスを返しています。
 キャッシュのTTL以内に同じリクエストが来た場合はキャッシュサーバーからデータを取得できるので、DBにリクエストが行かず負荷軽減とレスポンス速度向上に繋がります。
 
-<Img src="/assets/article/cache-strategy-batch/original-cache.webp" width="75%" />
+```mermaid
+sequenceDiagram
+    participant Client as クライアント
+    participant Server as サーバー
+    participant Cache as キャッシュサーバー
+    participant DB as DB
+
+    Client->>Server: リクエスト
+    Server->>Cache: データ取得
+    alt キャッシュにデータがある
+        Cache-->>Server: データ返却
+    else キャッシュにデータがない
+        Cache-->>Server: データなし
+        Server->>DB: データ取得
+        DB-->>Server: データ返却
+        Server->>Cache: データ格納
+    end
+    Server-->>Client: レスポンス
+```
 
 わりとよくある一般的な構成なのではないかと思います。
 
@@ -39,17 +57,57 @@ updatedAt: 2024/03/20
 
 まず、キャッシュサーバーへのデータの格納は、リクエストとは関係ないところで一定期間ごとに更新処理を行います。
 
-<Img src="/assets/article/cache-strategy-batch/batch-cache.webp" caption="定期実行によるキャッシュ更新処理" width="75%" />
+```mermaid
+sequenceDiagram
+    participant Server as サーバー
+    participant Cache as キャッシュサーバー
+    participant DB
+
+    loop 一定期間ごと
+        Server->>DB: 全データ取得
+        DB-->>Server: データ返却
+        Server->>Cache: データ格納
+    end
+```
 
 この時、リクエストで使用されうるあらゆるデータに対して、それらのkey-valueをキャッシュとして保持しておくことになります。
 
 一方で、クライアントからのリクエスト時にはオリジンであるDBには一切アクセスせず、キャッシュサーバーの情報だけを使います。(キャッシュにデータがない = DBにもデータがないとなります)
 
-<Img src="/assets/article/cache-strategy-batch/request-cache.webp" caption="リクエスト時の処理" width="75%" />
+```mermaid
+sequenceDiagram
+    participant Client as クライアント
+    participant Server as サーバー
+    participant Cache as キャッシュサーバー
+
+    Client->>Server: リクエスト
+    Server->>Cache: データ取得
+    Cache-->>Server: データ返却
+    Server-->>Client: レスポンス
+```
 
 合わせて全体像を見ると以下のようになっています
 
-<Img src="/assets/article/cache-strategy-batch/all-cache.webp" width="75%" />
+```mermaid
+sequenceDiagram
+    participant Client as クライアント
+    participant Server as サーバー
+    participant Cache as キャッシュサーバー
+    participant DB
+
+    Note over Client,Cache: リクエスト時の処理
+    Client->>Server: リクエスト
+    Server->>Cache: データ取得
+    Cache-->>Server: データ返却
+    Server-->>Client: レスポンス
+
+    Note over Server,DB: 非同期での定期実行 (リクエストとは無関係)
+    loop 一定期間ごと
+        Server->>DB: 全データ取得
+        DB-->>Server: データ返却
+        Server->>Cache: データ格納
+    end
+```
 
 リクエスト時にはキャッシュしか見に行かなくなったので、キャッシュのTTLが切れた時に一時的にDBへのアクセスが集中するThundering herd問題は起こらなくなります。当然それによってレスポンス速度が悪化することもなくなり、パフォーマンスが安定します。
 
@@ -153,7 +211,8 @@ func syncPeriodically(intervalSec int, fns ...func(ctx context.Context) error) {
 <Img src="/assets/article/cache-strategy-batch/aurora-final.webp" width="75%" />
 
 太平洋かってくらい穏やかですね
-1万RPSくらいあるのにも関わらず、クエリ数は数十/sec程度で済んでいます
+1万RPSくらいあるのにも関わらず、RDBのクエリ数は数十/sec程度で済んでいます
+クエリ発行数が99%程度削減できました
 
 ## まとめ
 
