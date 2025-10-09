@@ -2,7 +2,6 @@ import { ssgParams } from "hono/ssg"
 import { createRoute } from "honox/factory"
 import { Badge } from "@/components/parts/Badge"
 import { Card } from "@/components/parts/Card"
-import { LikeButton } from "@/components/projects/_LikeButton.island"
 import { Toc, TocButton } from "@/components/projects/_Toc.island"
 import { BuyMeCoffee } from "@/components/projects/BuyMeCoffee"
 import { SNSButton } from "@/components/projects/SNSButton"
@@ -53,7 +52,7 @@ export default createRoute(
           </Card>
           <Card type={{ initial: "slim", sm: "wide" }}>
             <div class="flex justify-center items-center py-4 gap-10 sm:gap-8 md:gap-20">
-              <LikeButton slug={slug} />
+              {/* <LikeButton slug={slug} /> */}
               <SNSButton slug={slug} />
               <div class="hidden sm:block">
                 <BuyMeCoffee />
