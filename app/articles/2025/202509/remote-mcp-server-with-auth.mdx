@@ -306,7 +306,7 @@ sequenceDiagram
 ### 1. DCR
 #### 1.1. Protected Resource Metadata
 
-リソースサーバーのMeatadataを返却するエンドポイントで`authorization_servers`をCognitoのドメインにしていましたが、これをMCPサーバー自身に変更します。
+リソースサーバーのMetadataを返却するエンドポイントで`authorization_servers`をCognitoのドメインにしていましたが、これをMCPサーバー自身に変更します。
 
 ```mermaid
 sequenceDiagram
@@ -359,7 +359,7 @@ sequenceDiagram
     Server->>Client: Authorization server metadata response
 ```
 
-以下が認可サーバーのMeatadataを返却するエンドポイントの実装です。
+以下が認可サーバーのMetadataを返却するエンドポイントの実装です。
 中身は基本的にはCognitoがレスポンスするものと同じですが、以下の点が異なります。
 - DCR用の`registration_endpoint`が追加されている
 - `authorization_endpoint`と`token_endpoint`が認可サーバーではなくMCPサーバーのエンドポイントになっている (理由は後述)

@@ -13,6 +13,7 @@ import rehypePrettyCode from "rehype-pretty-code"
 import rehypeAutolinkHeadings from "rehype-autolink-headings"
 import rehypeSlug from "rehype-slug"
 import rehypeMermaid from "rehype-mermaid"
+import { transformerNotationDiff, transformerNotationHighlight } from '@shikijs/transformers'
 import Sitemap from "vite-plugin-sitemap"
 import { baseURL } from "./app/constants/site"
 
@@ -63,7 +64,13 @@ export default defineConfig(({ mode }) => {
             ],
             rehypePlugins: [
               [rehypeMermaid, { strategy: "inline-svg" }],
-              [rehypePrettyCode, { theme: "monokai" }],
+              [rehypePrettyCode, {
+                theme: "monokai",
+                transformers: [
+                  transformerNotationDiff(),
+                  transformerNotationHighlight(),
+                ],
+              }],
               rehypeSlug,
               [rehypeAutolinkHeadings, { behavior: "wrap" }],
             ],
