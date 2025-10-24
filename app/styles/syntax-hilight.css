@@ -36,15 +36,18 @@ code > span {
   @apply text-sm;
 }
 
-[data-highlighted-line], code > span.highlighted {
+[data-highlighted-line],
+code > span.highlighted {
   background: rgba(200, 200, 255, 0.1);
 }
 
-[data-highlighted-line-id="add"], code > span.diff.add {
+[data-highlighted-line-id="add"],
+code > span.diff.add {
   background: #273732;
 }
 
-[data-highlighted-line-id="remove"], code > span.diff.remove {
+[data-highlighted-line-id="remove"],
+code > span.diff.remove {
   background: #3f2d32;
 }
 
